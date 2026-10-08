@@ -21,10 +21,10 @@ export interface PlanChange {
 }
 
 export const weeks = [
-  { label: "05–11 out", short: "05 out", range: "5 a 11 de outubro" },
-  { label: "12–18 out", short: "12 out", range: "12 a 18 de outubro" },
-  { label: "19–25 out", short: "19 out", range: "19 a 25 de outubro" },
-  { label: "26 out–01 nov", short: "26 out", range: "26 de outubro a 1º de novembro" },
+  { label: "05–11 out", short: "05 out", range: "5 a 11 de outubro", start: "2026-10-05", end: "2026-10-11" },
+  { label: "12–18 out", short: "12 out", range: "12 a 18 de outubro", start: "2026-10-12", end: "2026-10-18" },
+  { label: "19–25 out", short: "19 out", range: "19 a 25 de outubro", start: "2026-10-19", end: "2026-10-25" },
+  { label: "26 out–01 nov", short: "26 out", range: "26 de outubro a 1º de novembro", start: "2026-10-26", end: "2026-11-01" },
 ];
 export const holidayDays = [0, 1, 0, 0];
 export const absences: Record<string, Record<number, number>> = {

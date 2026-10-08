@@ -27,6 +27,23 @@ docs/architecture.md fluxo dos dados e responsabilidades de cada pasta
 
 Veja [docs/architecture.md](docs/architecture.md) para entender o caminho dos dados e onde implementar mudanças.
 
+Para retomar o projeto em outra sessão do Codex, leia também [docs/CODEX_CONTEXT.md](docs/CODEX_CONTEXT.md). O arquivo reúne problema, fluxo principal, decisões, estado das telas, regras, limitações e próximas etapas.
+
 ## Desenvolvimento local
 
-Este projeto preserva o adaptador de execução do Sites com Vinext e Cloudflare D1. Use uma versão do Node.js compatível com `package.json` e siga a configuração local de D1 do ambiente antes de executar `npm run dev`. Os comandos de build e publicação pertencem ao fluxo do Sites; por enquanto, as mudanças deste branch são locais.
+Use Node.js 22.13 ou superior. Na pasta que contém `package.json`, execute:
+
+```bash
+npm ci
+npm run build
+npx wrangler d1 execute DB --config dist/server/wrangler.json --local --file drizzle/0000_married_adam_warlock.sql --persist-to .wrangler/state
+npm run dev
+```
+
+O comando do D1 cria a tabela local na primeira instalação. Nos próximos acessos, basta `npm run dev`. Abra a URL mostrada pelo terminal, normalmente `http://localhost:5173`. A base local fica em `.wrangler/state` e é separada da base hospedada. Para conferir alterações, execute `npm run lint`, `npx tsc --noEmit` e `npm run build`.
+
+## Visão Geral
+
+A Visão Geral usa a semana do cenário que coincide com a data atual em São Paulo. Fora do período de 5 de outubro a 1º de novembro de 2026, mostra a semana mais próxima como **período do cenário**. O mapa usa a carga e a capacidade calculadas em `lib/planning.ts`, incluindo ausências e feriado. Cada cor é proporcional ao percentual de ocupação; o número e as horas permanecem visíveis para não depender somente da cor.
+
+Selecione uma pessoa para ver as atividades e a causa da ocupação. Quando existe uma sugestão, **Revisar sugestão** abre a atividade com o destino proposto e o impacto estimado. A mudança só é gravada no D1 após **Confirmar realocação**. Os alertas e o gráfico mostram apenas a semana exibida; o planejamento mantém as quatro semanas.

@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import "../features/overview/overview.css";
+import "../features/planning/planning.css";
 
 export const metadata: Metadata = {
   title: "Orquestra | Capacidade e alocação",

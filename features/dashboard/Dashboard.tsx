@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState, type DragEvent } from "react";
 import { NoticeToast } from "../../components/feedback/NoticeToast";
 import { Sidebar } from "../../components/layout/Sidebar";
 import { Topbar } from "../../components/layout/Topbar";
-import { people, type PlanChange } from "../../data/demo-data";
+import { people, workItems, type PlanChange } from "../../data/demo-data";
 import { OverviewPage } from "../overview/OverviewPage";
 import { PlanningPage } from "../planning/PlanningPage";
 import { TeamPage } from "../team/TeamPage";
@@ -16,6 +16,7 @@ import {
   getAlerts,
   getPerson,
   getSuggestions,
+  overviewPeriod,
   plannedItems,
   type Suggestion,
 } from "../../lib/planning";
@@ -27,14 +28,37 @@ interface DashboardProps {
 
 interface PlanApiResponse {
   error?: string;
-  changes: PlanChange[];
+  changes?: PlanChange[];
+}
+
+function getPlanChangeCount(saved: PlanChange[], draft: PlanChange[]): number {
+  const savedByTask = new Map(saved.map((change) => [change.taskId, change]));
+  const draftByTask = new Map(draft.map((change) => [change.taskId, change]));
+  const taskIds = new Set([...savedByTask.keys(), ...draftByTask.keys()]);
+
+  return [...taskIds].filter((taskId) => {
+    const savedChange = savedByTask.get(taskId);
+    const draftChange = draftByTask.get(taskId);
+    return savedChange?.personId !== draftChange?.personId || savedChange?.weekIndex !== draftChange?.weekIndex;
+  }).length;
+}
+
+function planChangesMatch(left: PlanChange[], right: PlanChange[]): boolean {
+  if (left.length !== right.length) return false;
+  const rightByTask = new Map(right.map((change) => [change.taskId, change]));
+  return left.every((change) => {
+    const match = rightByTask.get(change.taskId);
+    return match?.personId === change.personId && match?.weekIndex === change.weekIndex;
+  });
 }
 
 export default function Dashboard({ initialChanges }: DashboardProps) {
   const [view, setView] = useState<DashboardView>("overview");
   const [changes, setChanges] = useState<PlanChange[]>(initialChanges);
+  const [draftChanges, setDraftChanges] = useState<PlanChange[]>(initialChanges);
+  const [showSavedIndicator, setShowSavedIndicator] = useState(false);
   const [selectedProject, setSelectedProject] = useState("all");
-  const [selectedCell, setSelectedCell] = useState<CapacitySelection>({ personId: "ana", week: 0 });
+  const [selectedCell, setSelectedCell] = useState<CapacitySelection>(() => ({ personId: "ana", week: overviewPeriod().week }));
   const [taskId, setTaskId] = useState<string | null>(null);
   const [draftPerson, setDraftPerson] = useState("ana");
   const [draftWeek, setDraftWeek] = useState(0);
@@ -44,11 +68,14 @@ export default function Dashboard({ initialChanges }: DashboardProps) {
   const [sourceInfo, setSourceInfo] = useState<SourceInfo | null>(null);
   const [notice, setNotice] = useState("");
 
-  const items = useMemo(() => plannedItems(changes), [changes]);
+  const activeChanges = view === "planning" ? draftChanges : changes;
+  const items = useMemo(() => plannedItems(activeChanges), [activeChanges]);
   const loads = useMemo(() => allLoads(items), [items]);
   const alerts = useMemo(() => getAlerts(items), [items]);
   const suggestions = useMemo(() => getSuggestions(items), [items]);
   const activeTask = taskId ? items.find((task) => task.id === taskId) : undefined;
+  const pendingChangeCount = getPlanChangeCount(changes, draftChanges);
+  const hasPendingChanges = pendingChangeCount > 0;
   const availableHours = people.reduce((sum, person) => sum + capacityFor(person, 0), 0);
   const highAlertCount = alerts.filter((alert) => alert.severity === "high").length;
 
@@ -95,8 +122,20 @@ export default function Dashboard({ initialChanges }: DashboardProps) {
       const data = await response.json() as PlanApiResponse;
 
       if (!response.ok) throw new Error(data.error ?? "Falha ao salvar.");
+      if (!Array.isArray(data.changes)) {
+        throw new Error("A realocação não foi confirmada pelo servidor. Tente novamente.");
+      }
+
+      const savedChange = data.changes.find((change) => change.taskId === id);
+      const savedPersonId = savedChange?.personId ?? task.personId;
+      const savedWeekIndex = savedChange?.weekIndex ?? task.week;
+      if (savedPersonId !== personId || savedWeekIndex !== weekIndex) {
+        throw new Error("O destino solicitado não foi gravado. Tente novamente.");
+      }
 
       setChanges(data.changes);
+      setDraftChanges(data.changes);
+      setShowSavedIndicator(false);
       setSelectedCell({ personId, week: weekIndex });
       setNotice(`${task.title} realocada. A capacidade foi recalculada.`);
       setTaskId(null);
@@ -105,6 +144,74 @@ export default function Dashboard({ initialChanges }: DashboardProps) {
     } finally {
       setBusy(false);
       setDragTaskId(null);
+    }
+  }
+
+  function stageTaskMove(id: string, personId: string, weekIndex: number) {
+    if (busy) return;
+
+    const task = items.find((item) => item.id === id);
+    if (!task) return;
+
+    const person = getPerson(personId);
+    if (!person?.skills.includes(task.skill)) {
+      setNotice(`${person?.name ?? "Este profissional"} não possui a habilidade necessária.`);
+      return;
+    }
+
+    if (task.plannedPersonId === personId && task.plannedWeek === weekIndex) {
+      setTaskId(null);
+      return;
+    }
+
+    const originalTask = workItems.find((item) => item.id === id);
+    if (!originalTask) return;
+
+    const nextChanges = draftChanges.filter((change) => change.taskId !== id);
+    if (originalTask.personId !== personId || originalTask.week !== weekIndex) {
+      nextChanges.push({ taskId: id, personId, weekIndex });
+    }
+
+    setDraftChanges(nextChanges);
+    setShowSavedIndicator(false);
+    setSelectedCell({ personId, week: weekIndex });
+    setNotice(`${task.title} adicionada às alterações pendentes.`);
+    setTaskId(null);
+  }
+
+  function cancelPlanChanges() {
+    if (!hasPendingChanges || busy) return;
+    setDraftChanges(changes);
+    setShowSavedIndicator(false);
+    setTaskId(null);
+    setNotice("Alterações canceladas. O planejamento voltou ao estado salvo.");
+  }
+
+  async function savePlanChanges() {
+    if (!hasPendingChanges || busy) return;
+
+    setBusy(true);
+    try {
+      const response = await fetch("/api/plan", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ changes: draftChanges }),
+      });
+      const data = await response.json() as PlanApiResponse;
+
+      if (!response.ok) throw new Error(data.error ?? "Não foi possível salvar as alterações.");
+      if (!Array.isArray(data.changes) || !planChangesMatch(data.changes, draftChanges)) {
+        throw new Error("O servidor não confirmou todas as alterações. Tente novamente.");
+      }
+
+      setChanges(data.changes);
+      setDraftChanges(data.changes);
+      setShowSavedIndicator(true);
+      setNotice("Todas as alterações foram salvas.");
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "Não foi possível salvar as alterações.");
+    } finally {
+      setBusy(false);
     }
   }
 
@@ -117,6 +224,8 @@ export default function Dashboard({ initialChanges }: DashboardProps) {
       if (!response.ok) throw new Error();
 
       setChanges([]);
+      setDraftChanges([]);
+      setShowSavedIndicator(false);
       setNotice("Planejamento original restaurado.");
     } catch {
       setNotice("Não foi possível restaurar o planejamento.");
@@ -150,21 +259,39 @@ export default function Dashboard({ initialChanges }: DashboardProps) {
   function dropTask(event: DragEvent<HTMLElement>, personId: string, weekIndex: number) {
     event.preventDefault();
     const id = event.dataTransfer.getData("text/plain") || dragTaskId;
-    if (id) void moveTask(id, personId, weekIndex);
+    if (id) stageTaskMove(id, personId, weekIndex);
   }
 
   function selectProject(projectId: string) {
+    if (view === "planning" && hasPendingChanges) {
+      setNotice("Salve ou cancele as alterações pendentes antes de sair do Planejamento.");
+      return;
+    }
+
     setSelectedProject(projectId);
     setView("timelines");
+  }
+
+  function changeView(nextView: DashboardView) {
+    if (view === "planning" && nextView !== "planning" && hasPendingChanges) {
+      setNotice("Salve ou cancele as alterações pendentes antes de sair do Planejamento.");
+      return;
+    }
+    setView(nextView);
   }
 
   function handleAlertSelect(alert: (typeof alerts)[number]) {
     setSelectedCell({ personId: alert.personId, week: alert.week });
     if (alert.taskId) openTask(alert.taskId);
+    else document.getElementById("overview-capacity-detail")?.scrollIntoView({
+      behavior: "smooth", block: "nearest",
+    });
   }
 
   function applySuggestion(suggestion: Suggestion) {
-    void moveTask(suggestion.taskId, suggestion.toPersonId, suggestion.toWeek);
+    openTask(suggestion.taskId);
+    setDraftPerson(suggestion.toPersonId);
+    setDraftWeek(suggestion.toWeek);
   }
 
   return (
@@ -172,7 +299,7 @@ export default function Dashboard({ initialChanges }: DashboardProps) {
       <Sidebar
         view={view}
         highAlertCount={highAlertCount}
-        onViewChange={setView}
+        onViewChange={changeView}
         onProjectSelect={selectProject}
       />
 
@@ -193,6 +320,7 @@ export default function Dashboard({ initialChanges }: DashboardProps) {
               onApplySuggestion={applySuggestion}
               onAlertSelect={handleAlertSelect}
               onRefresh={() => void syncSource()}
+              onNavigatePlanning={() => setView("planning")}
             />
           )}
           {view === "timelines" && (
@@ -207,9 +335,14 @@ export default function Dashboard({ initialChanges }: DashboardProps) {
             <PlanningPage
               items={items}
               changeCount={changes.length}
+              pendingChangeCount={pendingChangeCount}
+              hasPendingChanges={hasPendingChanges}
+              showSavedIndicator={showSavedIndicator}
               busy={busy}
               dragTaskId={dragTaskId}
               onReset={() => void resetPlan()}
+              onCancelChanges={cancelPlanChanges}
+              onSaveChanges={() => void savePlanChanges()}
               onOpenTask={openTask}
               onDragStart={startDrag}
               onDragEnd={() => setDragTaskId(null)}
@@ -223,13 +356,17 @@ export default function Dashboard({ initialChanges }: DashboardProps) {
       {activeTask && (
         <TaskDialog
           task={activeTask}
+          items={items}
           draftPerson={draftPerson}
           draftWeek={draftWeek}
           busy={busy}
+          deferSave={view === "planning"}
           onDraftPersonChange={setDraftPerson}
           onDraftWeekChange={setDraftWeek}
           onClose={() => setTaskId(null)}
-          onSave={() => void moveTask(activeTask.id, draftPerson, draftWeek)}
+          onSave={() => void (view === "planning"
+            ? stageTaskMove(activeTask.id, draftPerson, draftWeek)
+            : moveTask(activeTask.id, draftPerson, draftWeek))}
         />
       )}
       {notice && <NoticeToast message={notice} onClose={() => setNotice("")} />}

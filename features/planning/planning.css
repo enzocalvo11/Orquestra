@@ -1,0 +1,37 @@
+.planning-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.planning-pending-indicator,
+.planning-saved-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 11px;
+  font-weight: 750;
+  white-space: nowrap;
+}
+
+.planning-pending-indicator {
+  border: 1px solid #f2dfb8;
+  background: #fff6e8;
+  color: #a56a20;
+}
+
+.planning-saved-indicator {
+  border: 1px solid #cdebdc;
+  background: #eaf8f2;
+  color: #278365;
+}
+
+@media (max-width: 700px) {
+  .planning-actions {
+    justify-content: flex-start;
+  }
+}

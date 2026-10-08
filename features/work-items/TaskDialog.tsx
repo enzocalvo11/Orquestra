@@ -2,7 +2,7 @@ import { useEffect } from "react";
 import { AlertCircle, ArrowRight, CalendarDays, Check, Clock3, X } from "lucide-react";
 import { ProjectTag } from "../../components/common/ProjectTag";
 import { people, weeks, type WorkItem } from "../../data/demo-data";
-import type { PlannedItem } from "../../lib/planning";
+import { formatHours, getPerson, loadFor, type PlannedItem } from "../../lib/planning";
 
 const typeName: Record<WorkItem["type"], string> = {
   Task: "Tarefa",
@@ -12,9 +12,11 @@ const typeName: Record<WorkItem["type"], string> = {
 
 interface TaskDialogProps {
   task: PlannedItem;
+  items: PlannedItem[];
   draftPerson: string;
   draftWeek: number;
   busy: boolean;
+  deferSave: boolean;
   onDraftPersonChange: (personId: string) => void;
   onDraftWeekChange: (week: number) => void;
   onClose: () => void;
@@ -23,14 +25,21 @@ interface TaskDialogProps {
 
 export function TaskDialog({
   task,
+  items,
   draftPerson,
   draftWeek,
   busy,
+  deferSave,
   onDraftPersonChange,
   onDraftWeekChange,
   onClose,
   onSave,
 }: TaskDialogProps) {
+  const changed = draftPerson !== task.plannedPersonId || draftWeek !== task.plannedWeek;
+  const source = loadFor(items, task.plannedPersonId, task.plannedWeek);
+  const target = loadFor(items, draftPerson, draftWeek);
+  const hours = task.status === "Concluído" ? 0 : task.hours;
+  const targetAfter = target.planned + hours;
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
       if (event.key === "Escape") onClose();
@@ -72,7 +81,11 @@ export function TaskDialog({
         </div>
         <div className="modal-divider" />
         <h3>Propor realocação</h3>
-        <p className="modal-helper">Essa alteração fica registrada no planejamento do Orquestra.</p>
+        <p className="modal-helper">
+          {deferSave
+            ? "A mudança ficará pendente até você salvar o planejamento."
+            : "A mudança será salva no planejamento."}
+        </p>
         <div className="modal-fields">
           <label>
             Responsável
@@ -91,6 +104,14 @@ export function TaskDialog({
             </select>
           </label>
         </div>
+        {changed && (
+          <div className="modal-impact">
+            <strong>Impacto previsto</strong>
+            <p>{getPerson(task.plannedPersonId)?.name} · {weeks[task.plannedWeek].label}: {formatHours(source.planned)}h → {formatHours(source.planned - hours)}h de {formatHours(source.capacity)}h</p>
+            <p>{getPerson(draftPerson)?.name} · {weeks[draftWeek].label}: {formatHours(target.planned)}h → {formatHours(targetAfter)}h de {formatHours(target.capacity)}h</p>
+            {targetAfter > target.capacity && <span>Essa mudança deixará o destino acima da capacidade.</span>}
+          </div>
+        )}
         {draftWeek > task.dueWeek && (
           <p className="deadline-warning">
             <AlertCircle size={16} /> A semana escolhida ultrapassa o prazo desta atividade.
@@ -98,8 +119,10 @@ export function TaskDialog({
         )}
         <div className="modal-actions">
           <button className="secondary-button" onClick={onClose}>Cancelar</button>
-          <button className="primary-button" disabled={busy} onClick={onSave}>
-            <Check size={16} /> Salvar proposta
+          <button className="primary-button" disabled={busy || !changed} onClick={onSave}>
+            <Check size={16} /> {busy
+              ? "Salvando realocação..."
+              : deferSave ? "Aplicar à prévia" : "Confirmar realocação"}
           </button>
         </div>
       </section>

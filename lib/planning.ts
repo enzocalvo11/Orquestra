@@ -25,6 +25,19 @@ export interface Suggestion {
 export const getPerson = (id: string) => people.find(p => p.id === id);
 export const getProject = (id: string) => projects.find(p => p.id === id);
 
+// The demonstration calendar is fixed in October 2026. Outside it, show the
+// closest period and label it as a scenario period rather than "this week".
+export function overviewPeriod(now = new Date()): { week: number; isCurrent: boolean } {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/Sao_Paulo", year: "numeric", month: "2-digit", day: "2-digit",
+  }).formatToParts(now);
+  const value = (type: string) => parts.find(part => part.type === type)?.value;
+  const date = `${value("year")}-${value("month")}-${value("day")}`;
+  const week = weeks.findIndex(period => period.start <= date && date <= period.end);
+  if (week >= 0) return { week, isCurrent: true };
+  return { week: date < weeks[0].start ? 0 : weeks.length - 1, isCurrent: false };
+}
+
 export function plannedItems(changes: PlanChange[]): PlannedItem[] {
   const byTask = new Map(changes.map(change => [change.taskId, change]));
   return workItems.map(task => {
