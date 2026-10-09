@@ -176,6 +176,7 @@ export default function Dashboard({ initialChanges }: DashboardProps) {
       return;
     }
 
+    const allocationChanged = task.plannedPersonId !== personId || task.plannedWeek !== weekIndex;
     setBusy(true);
     try {
       if (task.personId !== personId) {
@@ -186,6 +187,12 @@ export default function Dashboard({ initialChanges }: DashboardProps) {
         if (!(await syncSource(true))) {
           throw new Error("A tag foi atualizada no Azure DevOps, mas não foi possível recarregar os Work Items. Atualize a lista antes de continuar.");
         }
+      }
+
+      if (!allocationChanged) {
+        setTaskId(null);
+        setNotice(`${task.title}: prazo atualizado nas tags do Azure DevOps.`);
+        return;
       }
 
       const response = await fetch("/api/plan", {
