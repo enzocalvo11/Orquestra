@@ -1,0 +1,26 @@
+{
+	"$schema": "./node_modules/wrangler/config-schema.json",
+	"name": "orquestra-iport",
+	"main": "./build/cloudflare-worker.ts",
+	"compatibility_date": "2026-10-09",
+	"compatibility_flags": [
+		"nodejs_compat"
+	],
+	"d1_databases": [
+		{
+			"binding": "DB",
+			"database_name": "orquestra-iport-db",
+			"database_id": "db945b0c-081d-4cc1-ae5e-21fe645f5113",
+			"migrations_dir": "drizzle"
+		}
+	],
+	"secrets": {
+		"required": [
+			"AZURE_DEVOPS_ORGANIZATION",
+			"AZURE_DEVOPS_PROJECT",
+			"AZURE_DEVOPS_PAT",
+			"RESEND_API_KEY",
+			"RESEND_FROM_EMAIL"
+		]
+	}
+}

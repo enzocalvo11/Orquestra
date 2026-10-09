@@ -57,7 +57,7 @@ As telas não devem despejar todos os dados ao mesmo tempo. A Visão Geral prior
 | Regras de planejamento | TypeScript em `lib/planning.ts` |
 | Persistência | Cloudflare D1, baseado em SQLite |
 | Acesso ao banco | Drizzle ORM |
-| Hospedagem | ChatGPT Sites sobre Cloudflare |
+| Hospedagem | ChatGPT Sites na V1; deploy direto no Cloudflare Workers preparado, mas ainda não publicado |
 | Ícones | Lucide React |
 
 Python e PostgreSQL foram considerados no início, mas **não fazem parte da implementação atual**. Manter uma única linguagem facilita o protótipo interativo e a execução no ambiente de hospedagem adotado.
@@ -281,6 +281,8 @@ A versão inicial continua publicada em:
 Ela corresponde à versão 1 e ao commit inicial `10f502f5f83c58c5d6d62888a7c27a02d7b6d680`.
 
 As refatorações estruturais e de interface estão em desenvolvimento local e **ainda não foram publicadas**. Não publicar durante a fase atual.
+
+O repositório também possui uma configuração separada para deploy direto no Cloudflare Workers: o modo `cloudflare` de `vite.config.ts`, `wrangler.cloudflare.jsonc` e `build/cloudflare-worker.ts`. Ela preserva o adaptador do Sites e usa o binding `DB` para um D1 remoto. O procedimento está documentado em `docs/cloudflare-deploy.md`; preparar essa configuração não significa que a versão local já foi publicada.
 
 ## 14. Próximas etapas recomendadas
 

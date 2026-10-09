@@ -36,7 +36,9 @@ const localBindingConfig = {
     : [],
 };
 
-export default defineConfig(async ({ command }) => {
+export default defineConfig(async ({ command, mode }) => {
+  const directCloudflare = mode === "cloudflare";
+
   // Use Miniflare's local Request.cf placeholder unless fetching is requested.
   process.env.CLOUDFLARE_CF_FETCH_ENABLED ??= "false";
   process.env.WRANGLER_SEND_METRICS ??= "false";
@@ -62,39 +64,48 @@ export default defineConfig(async ({ command }) => {
     },
     plugins: [
       vinext(),
-      sites({ mockAuth: !managedLinux }),
-      connectorPreview(),
-      cloudflare({
-        viteEnvironment: { name: "rsc", childEnvironments: ["ssr"] },
-        inspectorPort: false,
-        config: {
-          ...localBindingConfig,
-          ...(command === "serve"
-            ? {
-                services: [
-                  {
-                    binding: "CONNECTORS",
-                    service: "sites-connector-preview",
-                    entrypoint: "ConnectorPreview",
-                  },
-                ],
-              }
-            : {}),
-        },
-        ...(command === "serve"
+      ...(directCloudflare
+        ? []
+        : [sites({ mockAuth: !managedLinux }), connectorPreview()]),
+      cloudflare(
+        directCloudflare
           ? {
-              auxiliaryWorkers: [
-                {
-                  config: {
-                    name: "sites-connector-preview",
-                    main: "./build/connector-preview-worker.mjs",
-                    compatibility_date: "2026-05-15",
-                  },
-                },
-              ],
+              configPath: "./wrangler.cloudflare.jsonc",
+              viteEnvironment: { name: "rsc", childEnvironments: ["ssr"] },
+              inspectorPort: false,
             }
-          : {}),
-      }),
+          : {
+              viteEnvironment: { name: "rsc", childEnvironments: ["ssr"] },
+              inspectorPort: false,
+              config: {
+                ...localBindingConfig,
+                ...(command === "serve"
+                  ? {
+                      services: [
+                        {
+                          binding: "CONNECTORS",
+                          service: "sites-connector-preview",
+                          entrypoint: "ConnectorPreview",
+                        },
+                      ],
+                    }
+                  : {}),
+              },
+              ...(command === "serve"
+                ? {
+                    auxiliaryWorkers: [
+                      {
+                        config: {
+                          name: "sites-connector-preview",
+                          main: "./build/connector-preview-worker.mjs",
+                          compatibility_date: "2026-05-15",
+                        },
+                      },
+                    ],
+                  }
+                : {}),
+            },
+      ),
     ],
   };
 });

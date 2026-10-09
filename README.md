@@ -45,6 +45,30 @@ npm run dev
 
 Os comandos do D1 criam as tabelas locais na primeira instalacao. Nos proximos acessos, basta `npm run dev`. Abra a URL mostrada pelo terminal, normalmente `http://localhost:5173`. A base local fica em `.wrangler/state` e e separada da base hospedada. Para conferir alteracoes, execute `npm run lint`, `npx tsc --noEmit` e `npm run build`.
 
+## Deploy direto no Cloudflare Workers
+
+O projeto mantém o adaptador do Sites, mas também possui uma configuração separada para publicar no Cloudflare Workers. O deploy direto usa o plano gratuito, o endereço `workers.dev` e um banco D1 remoto. A base local em `.wrangler/state` não é copiada para a nuvem.
+
+Antes do primeiro deploy, confirme que `.dev.vars` possui as cinco chaves preenchidas mostradas em `.dev.vars.example`. Esse arquivo é ignorado pelo Git e o comando de deploy envia seus valores diretamente como segredos do Worker; não copie os valores para arquivos versionados.
+
+Na primeira publicação:
+
+```bash
+npx wrangler login
+npm run db:migrate:cloudflare
+npm run deploy:cloudflare
+```
+
+O D1 deste projeto já está criado e vinculado pelo `database_id` público em `wrangler.cloudflare.jsonc`; não execute novamente `wrangler d1 create` na mesma conta. As migrations criam `plan_changes`, `employee_contacts` e os contatos fictícios no banco hospedado. O deploy executa um build específico para Cloudflare, envia as variáveis de `.dev.vars` como segredos e publica o Worker. O terminal apresenta a URL final `https://<nome>.<subdomínio>.workers.dev`.
+
+Nos deploys seguintes, desde que não haja uma migration nova, basta executar:
+
+```bash
+npm run deploy:cloudflare
+```
+
+Se uma migration nova for criada, aplique `npm run db:migrate:cloudflare` antes do deploy. Consulte o passo a passo detalhado em `docs/cloudflare-deploy.md`.
+
 ## Visão Geral
 
 A Visão Geral usa a semana do cenário que coincide com a data atual em São Paulo. Fora do período de 5 de outubro a 1º de novembro de 2026, mostra a semana mais próxima como **período do cenário**. O mapa usa a carga e a capacidade calculadas em `lib/planning.ts`, incluindo ausências e feriado. Cada cor é proporcional ao percentual de ocupação; o número e as horas permanecem visíveis para não depender somente da cor.
