@@ -15,11 +15,13 @@ interface TaskDialogProps {
   items: PlannedItem[];
   draftPerson: string;
   draftWeek: number;
+  draftDueWeek: number;
   busy: boolean;
   deferSave: boolean;
   allowAnyPerson?: boolean;
   onDraftPersonChange: (personId: string) => void;
   onDraftWeekChange: (week: number) => void;
+  onDraftDueWeekChange: (week: number) => void;
   onClose: () => void;
   onSave: () => void;
 }
@@ -29,15 +31,18 @@ export function TaskDialog({
   items,
   draftPerson,
   draftWeek,
+  draftDueWeek,
   busy,
   deferSave,
   allowAnyPerson = false,
   onDraftPersonChange,
   onDraftWeekChange,
+  onDraftDueWeekChange,
   onClose,
   onSave,
 }: TaskDialogProps) {
-  const changed = draftPerson !== task.plannedPersonId || draftWeek !== task.plannedWeek;
+  const changed = draftPerson !== task.plannedPersonId || draftWeek !== task.plannedWeek || draftDueWeek !== task.dueWeek;
+  const allocationChanged = draftPerson !== task.plannedPersonId || draftWeek !== task.plannedWeek;
   const source = loadFor(items, task.plannedPersonId, task.plannedWeek);
   const target = loadFor(items, draftPerson, draftWeek);
   const hours = task.status === "Concluído" ? 0 : task.hours;
@@ -77,7 +82,7 @@ export function TaskDialog({
         </div>
         <div className="modal-facts">
           <span><small>ESTIMATIVA</small><strong><Clock3 size={16} /> {task.hours} horas</strong></span>
-          <span><small>PRAZO</small><strong><CalendarDays size={16} /> {weeks[task.dueWeek].label}</strong></span>
+          <span><small>PRAZO</small><strong><CalendarDays size={16} /> {weeks[draftDueWeek].label}</strong></span>
           <span><small>PRIORIDADE</small><strong>{task.priority}</strong></span>
           <span><small>STATUS</small><strong>{task.status}</strong></span>
         </div>
@@ -85,8 +90,10 @@ export function TaskDialog({
         <h3>Propor realocação</h3>
         <p className="modal-helper">
           {deferSave
-            ? "A mudança ficará pendente até você salvar o planejamento."
-            : "A mudança será salva no planejamento."}
+            ? "As alterações ficarão pendentes até você salvar o planejamento."
+            : allocationChanged
+              ? "A realocação será salva no planejamento."
+              : "O prazo será atualizado nas tags do Azure DevOps."}
         </p>
         <div className="modal-fields">
           <label>
@@ -106,8 +113,14 @@ export function TaskDialog({
               {weeks.map((week, index) => <option key={index} value={index}>{week.label}</option>)}
             </select>
           </label>
+          <label>
+            Prazo
+            <select value={draftDueWeek} onChange={(event) => onDraftDueWeekChange(Number(event.target.value))}>
+              {weeks.map((week, index) => <option key={week.label} value={index}>{week.label}</option>)}
+            </select>
+          </label>
         </div>
-        {changed && (
+        {allocationChanged && (
           <div className="modal-impact">
             <strong>Impacto previsto</strong>
             <p>{getPerson(task.plannedPersonId)?.name} · {weeks[task.plannedWeek].label}: {formatHours(source.planned)}h → {formatHours(source.planned - hours)}h de {formatHours(source.capacity)}h</p>
@@ -115,7 +128,7 @@ export function TaskDialog({
             {targetAfter > target.capacity && <span>Essa mudança deixará o destino acima da capacidade.</span>}
           </div>
         )}
-        {draftWeek > task.dueWeek && (
+        {draftWeek > draftDueWeek && (
           <p className="deadline-warning">
             <AlertCircle size={16} /> A semana escolhida ultrapassa o prazo desta atividade.
           </p>
@@ -125,6 +138,13 @@ export function TaskDialog({
             {deferSave
               ? "Ao salvar as alterações do planejamento, a tag de responsável deste Work Item no Azure DevOps também será atualizada."
               : "Ao confirmar, a tag de responsável deste Work Item no Azure DevOps também será atualizada."}
+          </p>
+        )}
+        {draftDueWeek !== task.dueWeek && (
+          <p className="modal-helper">
+            {deferSave
+              ? "Ao salvar as alterações do planejamento, a tag prazo: deste Work Item também será substituída no Azure DevOps."
+              : "Ao confirmar, a tag prazo: deste Work Item também será substituída no Azure DevOps."}
           </p>
         )}
         <div className="modal-actions">

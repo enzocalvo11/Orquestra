@@ -4,12 +4,12 @@ import { useCallback, useEffect, useMemo, useState, type DragEvent } from "react
 import { NoticeToast } from "../../components/feedback/NoticeToast";
 import { Sidebar } from "../../components/layout/Sidebar";
 import { Topbar } from "../../components/layout/Topbar";
-import { people, replaceAzureSource, type PlanChange } from "../../data/demo-data";
+import { people, replaceAzureSource, weeks, type PlanChange } from "../../data/demo-data";
 import { OverviewPage } from "../overview/OverviewPage";
 import { PlanningPage } from "../planning/PlanningPage";
 import { TeamPage } from "../team/TeamPage";
 import { TaskDialog } from "../work-items/TaskDialog";
-import type { AzureWorkItemSnapshot } from "../../lib/azure-devops";
+import type { AzureTagType, AzureWorkItemSnapshot } from "../../lib/azure-devops";
 import { TimelinesPage } from "../timelines/TimelinesPage";
 import {
   allLoads,
@@ -37,16 +37,23 @@ interface AzureAssignmentResponse {
   workItem?: AzureWorkItemSnapshot;
 }
 
-function getPlanChangeCount(saved: PlanChange[], draft: PlanChange[]): number {
+interface AzureTagUpdateResponse extends AzureAssignmentResponse {
+  tagType?: AzureTagType;
+  value?: string;
+}
+
+function getPlanChangeCount(saved: PlanChange[], draft: PlanChange[], additionalTaskIds: string[] = []): number {
   const savedByTask = new Map(saved.map((change) => [change.taskId, change]));
   const draftByTask = new Map(draft.map((change) => [change.taskId, change]));
   const taskIds = new Set([...savedByTask.keys(), ...draftByTask.keys()]);
 
-  return [...taskIds].filter((taskId) => {
+  const changedTaskIds = new Set([...taskIds].filter((taskId) => {
     const savedChange = savedByTask.get(taskId);
     const draftChange = draftByTask.get(taskId);
     return savedChange?.personId !== draftChange?.personId || savedChange?.weekIndex !== draftChange?.weekIndex;
-  }).length;
+  }));
+  additionalTaskIds.forEach((taskId) => changedTaskIds.add(taskId));
+  return changedTaskIds.size;
 }
 
 function planChangesMatch(left: PlanChange[], right: PlanChange[]): boolean {
@@ -76,6 +83,8 @@ export default function Dashboard({ initialChanges }: DashboardProps) {
   const [taskId, setTaskId] = useState<string | null>(null);
   const [draftPerson, setDraftPerson] = useState("ana");
   const [draftWeek, setDraftWeek] = useState(0);
+  const [draftDueWeek, setDraftDueWeek] = useState(0);
+  const [draftDeadlineChanges, setDraftDeadlineChanges] = useState<Record<string, number>>({});
   const [dragTaskId, setDragTaskId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [syncing, setSyncing] = useState(false);
@@ -84,16 +93,19 @@ export default function Dashboard({ initialChanges }: DashboardProps) {
   const [notice, setNotice] = useState("");
 
   const activeChanges = view === "planning" ? draftChanges : changes;
-  const items = useMemo(() => plannedItems(
-    activeChanges,
-    sourceInfo?.workItems ?? [],
-    changes,
-  ), [activeChanges, changes, sourceInfo]);
+  const items = useMemo(() => {
+    const planned = plannedItems(activeChanges, sourceInfo?.workItems ?? [], changes);
+    if (view !== "planning") return planned;
+    return planned.map((item) => ({
+      ...item,
+      dueWeek: draftDeadlineChanges[item.id] ?? item.dueWeek,
+    }));
+  }, [activeChanges, changes, draftDeadlineChanges, sourceInfo, view]);
   const loads = useMemo(() => allLoads(items), [items]);
   const alerts = useMemo(() => getAlerts(items), [items]);
   const suggestions = useMemo(() => getSuggestions(items), [items]);
   const activeTask = taskId ? items.find((task) => task.id === taskId) : undefined;
-  const pendingChangeCount = getPlanChangeCount(changes, draftChanges);
+  const pendingChangeCount = getPlanChangeCount(changes, draftChanges, Object.keys(draftDeadlineChanges));
   const hasPendingChanges = pendingChangeCount > 0;
   const availableHours = people.reduce((sum, person) => sum + capacityFor(person, 0), 0);
   const highAlertCount = alerts.filter((alert) => alert.severity === "high").length;
@@ -112,32 +124,40 @@ export default function Dashboard({ initialChanges }: DashboardProps) {
     setTaskId(id);
     setDraftPerson(task.plannedPersonId);
     setDraftWeek(task.plannedWeek);
+    setDraftDueWeek(draftDeadlineChanges[id] ?? task.dueWeek);
   }
 
-  async function moveTask(id: string, personId: string, weekIndex: number) {
+  async function moveTask(id: string, personId: string, weekIndex: number, dueWeek: number) {
     if (busy) return;
 
     const task = items.find((item) => item.id === id);
     if (!task) return;
 
     const person = getPerson(personId);
-    if (!person?.skills.includes(task.skill)) {
+    if (task.plannedPersonId !== personId && !person?.skills.includes(task.skill)) {
       setNotice(`${person?.name ?? "Este profissional"} não possui a habilidade necessária.`);
       return;
     }
 
-    if (task.plannedPersonId === personId && task.plannedWeek === weekIndex) {
+    if (task.plannedPersonId === personId && task.plannedWeek === weekIndex && task.dueWeek === dueWeek) {
       setTaskId(null);
       return;
     }
 
     setBusy(true);
     try {
-      if (task.personId !== personId) {
+      const responsibleChanged = task.personId !== personId;
+      const deadlineChanged = task.dueWeek !== dueWeek;
+      if (responsibleChanged) {
         if (!Number.isSafeInteger(task.externalId) || task.externalId <= 0) {
           throw new Error("Esta tarefa não tem um ID do Azure DevOps válido.");
         }
         await updateAzureResponsible(task.externalId, personId);
+      }
+      if (deadlineChanged) {
+        await updateAzureTag(task.externalId, "prazo", weeks[dueWeek].end);
+      }
+      if (responsibleChanged || deadlineChanged) {
         if (!(await syncSource(true))) {
           throw new Error("A tag foi atualizada no Azure DevOps, mas não foi possível recarregar os Work Items. Atualize a lista antes de continuar.");
         }
@@ -176,19 +196,18 @@ export default function Dashboard({ initialChanges }: DashboardProps) {
     }
   }
 
-  function stageTaskMove(id: string, personId: string, weekIndex: number) {
+  function stageTaskMove(id: string, personId: string, weekIndex: number, dueWeek: number) {
     if (busy) return;
 
     const task = items.find((item) => item.id === id);
     if (!task) return;
 
-    if (task.plannedPersonId === personId && task.plannedWeek === weekIndex) {
+    const originalTask = sourceInfo?.workItems.find((item) => item.id === id);
+    if (!originalTask) return;
+    if (task.plannedPersonId === personId && task.plannedWeek === weekIndex && task.dueWeek === dueWeek) {
       setTaskId(null);
       return;
     }
-
-    const originalTask = sourceInfo?.workItems.find((item) => item.id === id);
-    if (!originalTask) return;
 
     const nextChanges = draftChanges.filter((change) => change.taskId !== id);
     if (originalTask.personId !== personId || originalTask.week !== weekIndex) {
@@ -196,6 +215,12 @@ export default function Dashboard({ initialChanges }: DashboardProps) {
     }
 
     setDraftChanges(nextChanges);
+    setDraftDeadlineChanges((current) => {
+      const next = { ...current };
+      if (dueWeek === originalTask.dueWeek) delete next[id];
+      else next[id] = dueWeek;
+      return next;
+    });
     setShowSavedIndicator(false);
     setSelectedCell({ personId, week: weekIndex });
     setNotice(`${task.title} adicionada às alterações pendentes.`);
@@ -205,6 +230,7 @@ export default function Dashboard({ initialChanges }: DashboardProps) {
   function cancelPlanChanges() {
     if (!hasPendingChanges || busy) return;
     setDraftChanges(changes);
+    setDraftDeadlineChanges({});
     setShowSavedIndicator(false);
     setTaskId(null);
     setNotice("Alterações canceladas. O planejamento voltou ao estado salvo.");
@@ -224,12 +250,21 @@ export default function Dashboard({ initialChanges }: DashboardProps) {
           ? [{ item, personId: change.personId }]
           : [];
       });
+      const deadlineUpdates = Object.entries(draftDeadlineChanges).map(([taskId, dueWeek]) => {
+        const item = sourceByTask.get(taskId);
+        const week = weeks[dueWeek];
+        if (!item || !week) throw new Error("Uma alteração de prazo não corresponde a um Work Item carregado.");
+        return item.dueWeek === dueWeek ? null : { item, dueDate: week.end };
+      }).filter((update): update is { item: (typeof sourceItems)[number]; dueDate: string } => update !== null);
 
       for (const { item, personId } of assignments) {
         await updateAzureResponsible(item.externalId, personId);
       }
+      for (const { item, dueDate } of deadlineUpdates) {
+        await updateAzureTag(item.externalId, "prazo", dueDate);
+      }
       let currentWorkItems = sourceItems;
-      if (assignments.length) {
+      if (assignments.length || deadlineUpdates.length) {
         const refreshedSource = await syncSource(true);
         if (!refreshedSource) {
           throw new Error("As tags foram atualizadas no Azure DevOps, mas não foi possível recarregar os Work Items. Atualize a lista antes de salvar o planejamento.");
@@ -252,6 +287,7 @@ export default function Dashboard({ initialChanges }: DashboardProps) {
 
       setChanges(data.changes);
       setDraftChanges(data.changes);
+      setDraftDeadlineChanges({});
       setShowSavedIndicator(true);
       setNotice("Todas as alterações foram salvas.");
     } catch (error) {
@@ -304,21 +340,25 @@ export default function Dashboard({ initialChanges }: DashboardProps) {
     }
   }, []);
 
-  async function updateAzureResponsible(workItemId: number, personId: string): Promise<AzureWorkItemSnapshot> {
-    const response = await fetch("/api/azure-devops/assign", {
+  async function updateAzureTag(workItemId: number, tagType: AzureTagType, value: string): Promise<AzureWorkItemSnapshot> {
+    const response = await fetch("/api/azure-devops/tags", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ workItemId, personId }),
+      body: JSON.stringify({ workItemId, tagType, value }),
     });
-    const data = await response.json() as AzureAssignmentResponse;
+    const data = await response.json() as AzureTagUpdateResponse;
     if (!response.ok || !data.workItem) {
-      throw new Error(data.error ?? "Não foi possível confirmar as tags no Azure DevOps.");
+      throw new Error(data.error ?? "Não foi possível confirmar a tag no Azure DevOps.");
     }
-    const expectedTag = `responsavel:${personId}`.toLowerCase();
+    const expectedTag = `${tagType}:${value}`.toLowerCase();
     if (!data.workItem.tags.some((tag) => tag.toLowerCase() === expectedTag)) {
-      throw new Error("O Azure DevOps não confirmou a tag do responsável após a atualização.");
+      throw new Error(`O Azure DevOps não confirmou a tag ${tagType} após a atualização.`);
     }
     return data.workItem;
+  }
+
+  async function updateAzureResponsible(workItemId: number, personId: string): Promise<AzureWorkItemSnapshot> {
+    return updateAzureTag(workItemId, "responsavel", personId);
   }
 
   useEffect(() => {
@@ -334,7 +374,8 @@ export default function Dashboard({ initialChanges }: DashboardProps) {
   function dropTask(event: DragEvent<HTMLElement>, personId: string, weekIndex: number) {
     event.preventDefault();
     const id = event.dataTransfer.getData("text/plain") || dragTaskId;
-    if (id) stageTaskMove(id, personId, weekIndex);
+    const task = id ? items.find((item) => item.id === id) : undefined;
+    if (task) stageTaskMove(task.id, personId, weekIndex, task.dueWeek);
   }
 
   function selectProject(projectId: string) {
@@ -434,15 +475,17 @@ export default function Dashboard({ initialChanges }: DashboardProps) {
           items={items}
           draftPerson={draftPerson}
           draftWeek={draftWeek}
+          draftDueWeek={draftDueWeek}
           busy={busy}
           deferSave={view === "planning"}
           allowAnyPerson={view === "planning"}
           onDraftPersonChange={setDraftPerson}
           onDraftWeekChange={setDraftWeek}
+          onDraftDueWeekChange={setDraftDueWeek}
           onClose={() => setTaskId(null)}
           onSave={() => void (view === "planning"
-            ? stageTaskMove(activeTask.id, draftPerson, draftWeek)
-            : moveTask(activeTask.id, draftPerson, draftWeek))}
+            ? stageTaskMove(activeTask.id, draftPerson, draftWeek, draftDueWeek)
+            : moveTask(activeTask.id, draftPerson, draftWeek, draftDueWeek))}
         />
       )}
       {notice && <NoticeToast message={notice} onClose={() => setNotice("")} />}
