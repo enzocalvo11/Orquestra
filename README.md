@@ -55,7 +55,7 @@ As sugestões buscam aliviar a sobrecarga com profissionais que tenham a habilid
 | Estilos e ícones | CSS, Tailwind CSS e Lucide React |
 | Persistência | Cloudflare D1 (SQLite) e Drizzle ORM |
 | Integração | Azure DevOps REST API |
-| E-mails | Resend |
+| Notificações | Resend |
 
 ## Integração e dados atuais
 
@@ -162,3 +162,10 @@ npm run build
 - **Calendário real:** substituir o período fixo por datas, feriados e ausências atualizáveis.
 - **Histórico de alterações:** registrar decisões e versões do planejamento para consulta e comparação.
 - **IA de apoio:** evoluir as recomendações e apoiar a análise do gestor, mantendo a revisão humana.
+
+## Participantes
+
+- Antonio Coelho
+- Enzo Calvo
+- Arthur Contato
+- Marcelo Watanabe
