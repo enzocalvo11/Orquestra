@@ -1,7 +1,8 @@
 import { useState, type DragEvent } from "react";
-import { Check, Info, RotateCcw, Save } from "lucide-react";
+import { Check, ChevronDown, Info, RotateCcw, Save } from "lucide-react";
+import { AlertCard } from "../../components/common/AlertCard";
 import { projects } from "../../data/demo-data";
-import type { PlannedItem } from "../../lib/planning";
+import type { Alert, PlannedItem } from "../../lib/planning";
 import { PeopleByWeek } from "./PeopleByWeek";
 import { ProjectsByWeek } from "./ProjectsByWeek";
 import { useDragAutoScroll } from "./useDragAutoScroll";
@@ -15,6 +16,10 @@ const boardViews: ReadonlyArray<{ key: BoardView; label: string }> = [
 
 interface PlanningPageProps {
   items: PlannedItem[];
+  highlightedTaskId: string | null;
+  highlightedCell: { personId: string; week: number } | null;
+  highlightedCellKind: "alert" | "recommendation" | null;
+  alerts: Alert[];
   changeCount: number;
   pendingChangeCount: number;
   hasPendingChanges: boolean;
@@ -25,6 +30,7 @@ interface PlanningPageProps {
   onCancelChanges: () => void;
   onSaveChanges: () => void;
   onOpenTask: (taskId: string) => void;
+  onAlertSelect: (alert: Alert) => void;
   onDragStart: (event: DragEvent<HTMLElement>, taskId: string) => void;
   onDragEnd: () => void;
   onDrop: (event: DragEvent<HTMLElement>, personId: string, week: number) => void;
@@ -32,6 +38,10 @@ interface PlanningPageProps {
 
 export function PlanningPage({
   items,
+  highlightedTaskId,
+  highlightedCell,
+  highlightedCellKind,
+  alerts,
   changeCount,
   pendingChangeCount,
   hasPendingChanges,
@@ -42,20 +52,23 @@ export function PlanningPage({
   onCancelChanges,
   onSaveChanges,
   onOpenTask,
+  onAlertSelect,
   onDragStart,
   onDragEnd,
   onDrop,
 }: PlanningPageProps) {
   const [boardView, setBoardView] = useState<BoardView>("people");
   const [selectedProject, setSelectedProject] = useState("all");
+  const [helpExpanded, setHelpExpanded] = useState(false);
   // Falls back to "all" if the chosen project disappears after the source is refreshed.
   const projectFilter = projects.some((project) => project.id === selectedProject) ? selectedProject : "all";
   const draggedTask = items.find((task) => task.id === dragTaskId);
+  const planningAlerts = alerts.filter((alert) => alert.kind === "overload" || alert.kind === "deadline");
   useDragAutoScroll(dragTaskId !== null);
 
   return (
     <>
-      <div className="page-heading">
+      <div className="page-heading planning-page-heading">
         <div>
           <div className="eyebrow">CENÁRIO DE ALOCAÇÃO</div>
           <h1>Planeje antes de decidir.</h1>
@@ -89,17 +102,43 @@ export function PlanningPage({
         </div>
       </div>
 
-      <div className="planning-banner">
-        <span><Info size={18} /></span>
-        <p>
+      <div
+        className={`planning-banner ${helpExpanded ? "planning-banner-expanded" : "planning-banner-collapsed"}`}
+        role="button"
+        tabIndex={0}
+        aria-expanded={helpExpanded}
+        aria-controls="planning-help-details"
+        onClick={() => setHelpExpanded((expanded) => !expanded)}
+        onKeyDown={(event) => {
+          if (event.key === "Enter" || event.key === " ") {
+            event.preventDefault();
+            setHelpExpanded((expanded) => !expanded);
+          }
+        }}
+      >
+        <span className="planning-banner-icon"><Info size={18} /></span>
+        <div className="planning-banner-content">
+          <strong>{boardView === "people" ? "Como usar:" : "Visão resumida:"}</strong>
           {boardView === "people" ? (
-            <><strong>Como usar:</strong> mova os cartões para testar uma nova distribuição. As mudanças só são gravadas ao salvar.</>
+            <ul className="planning-instructions" id="planning-help-details" hidden={!helpExpanded}>
+              <li>Arraste uma atividade ou clique no cartão para testar uma nova distribuição.</li>
+              <li>As mudanças só são gravadas ao <strong>SALVAR</strong>.</li>
+            </ul>
           ) : (
-            <><strong>Visão resumida:</strong> mostra quanto cada projeto consome da equipe por semana. Para mover atividades, volte para Pessoas × semanas.</>
+            <p id="planning-help-details" hidden={!helpExpanded}>Mostra quanto cada projeto consome da equipe por semana. Para mover atividades, volte para Pessoas × semanas.</p>
           )}
-        </p>
-        <span>{hasPendingChanges ? "Não salvo" : `${changeCount} salvas`}</span>
+        </div>
+        <ChevronDown className={`planning-banner-chevron ${helpExpanded ? "is-expanded" : ""}`} size={18} aria-hidden="true" />
       </div>
+
+      {planningAlerts.length > 0 && (
+        <AlertCard
+          className="planning-alerts"
+          alerts={planningAlerts}
+          eyebrow="ALERTAS DE SOBRECARGA E PRAZO"
+          onAlertSelect={onAlertSelect}
+        />
+      )}
 
       <div className="surface planning-surface">
         <div className="section-heading">
@@ -138,6 +177,9 @@ export function PlanningPage({
             <div className="legend">
               <span><i className="legend-dot good" /> Espaço livre</span>
               <span><i className="legend-dot danger" /> Acima do limite</span>
+              {highlightedCellKind === "recommendation" && (
+                <span><i className="legend-dot recommendation" /> Destino recomendado</span>
+              )}
             </div>
           )}
         </div>
@@ -145,6 +187,9 @@ export function PlanningPage({
         {boardView === "people" ? (
           <PeopleByWeek
             items={items}
+            highlightedTaskId={highlightedTaskId}
+            highlightedCell={highlightedCell}
+            highlightedCellKind={highlightedCellKind}
             projectFilter={projectFilter}
             draggedTask={draggedTask}
             onOpenTask={onOpenTask}

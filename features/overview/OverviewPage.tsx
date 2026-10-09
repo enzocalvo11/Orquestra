@@ -1,10 +1,11 @@
 import { useState } from "react";
 import type { CSSProperties } from "react";
 import {
-  Activity, AlertCircle, ArrowRight, ArrowUpRight, CalendarDays,
+  Activity, AlertCircle, ArrowRight, CalendarDays,
   Cloud, Layers3, RefreshCw, UsersRound,
 } from "lucide-react";
 import { Avatar } from "../../components/common/Avatar";
+import { AlertCard } from "../../components/common/AlertCard";
 import { MetricCard } from "../../components/common/MetricCard";
 import { absences, people, projects, weeks } from "../../data/demo-data";
 import {
@@ -24,7 +25,7 @@ interface OverviewPageProps {
   syncing: boolean;
   onSelectCell: (selection: CapacitySelection) => void;
   onOpenTask: (taskId: string) => void;
-  onApplySuggestion: (suggestion: Suggestion) => void;
+  onReviewSuggestion: (suggestion: Suggestion) => void;
   onAlertSelect: (alert: Alert) => void;
   onRefresh: () => void;
   onNavigatePlanning: () => void;
@@ -82,11 +83,12 @@ function loadLabel(cell: LoadCell): string {
 }
 
 function CapacityHeatmap({
-  cells, selectedPersonId, week, onSelect, onWeekChange, onNavigatePlanning,
+  cells, selectedPersonId, week, alertWeeks, onSelect, onWeekChange, onNavigatePlanning,
 }: {
   cells: LoadCell[];
   selectedPersonId: string;
   week: number;
+  alertWeeks: Set<number>;
   onSelect: (selection: CapacitySelection) => void;
   onWeekChange: (week: number) => void;
   onNavigatePlanning: () => void;
@@ -103,11 +105,14 @@ function CapacityHeatmap({
           {weeks.map((option, index) => (
             <button
               key={option.label}
-              className={week === index ? "selected" : ""}
+              className={`${week === index ? "selected" : ""} ${alertWeeks.has(index) ? "has-alerts" : ""}`}
               onClick={() => onWeekChange(index)}
               aria-pressed={week === index}
+              aria-label={`${option.label}${alertWeeks.has(index) ? ", há alertas" : ""}`}
+              title={alertWeeks.has(index) ? "Há alertas nesta semana" : undefined}
             >
               {option.label}
+              {alertWeeks.has(index) && <span className="overview-week-alert" aria-hidden="true" />}
             </button>
           ))}
         </div>
@@ -129,7 +134,7 @@ function CapacityHeatmap({
                 <Avatar personId={person.id} small />
                 <span className="overview-heat-name">{person.name}<small>{person.role}</small></span>
               </span>
-              <span className="overview-heat-value">{cell.percent}%<small>{formatHours(cell.planned)} de {formatHours(cell.capacity)}h</small></span>
+              <span className="overview-heat-value">{cell.percent}%</span>
               <span className="overview-heat-track"><i style={{ width: `${Math.min(cell.percent, 100)}%` }} /></span>
               <span className="overview-heat-caption">{loadLabel(cell)}</span>
             </button>
@@ -276,52 +281,24 @@ function WeekActivities({
   );
 }
 
-function WeekAlerts({
-  alerts, week, onAlertSelect,
-}: {
-  alerts: Alert[];
-  week: number;
-  onAlertSelect: (alert: Alert) => void;
-}) {
-  if (alerts.length === 0) return null;
-
-  return (
-    <section className="surface overview-alerts" aria-labelledby="overview-alerts-title">
-      <div className="section-heading">
-        <div>
-          <div className="section-kicker">PRIORIDADES · {weeks[week].label.toUpperCase()}</div>
-          <h2 id="overview-alerts-title">Alertas</h2>
-        </div>
-        <span className="alert-count">{alerts.length} {alerts.length === 1 ? "alerta" : "alertas"}</span>
-      </div>
-      {alerts.length ? (
-        <div className="alert-list">
-          {alerts.slice(0, 4).map((alert) => (
-            <button className="alert-row" key={alert.id} onClick={() => onAlertSelect(alert)}>
-              <span className={`alert-icon ${alert.severity}`}><AlertCircle size={17} /></span>
-              <span><strong>{alert.title}</strong><small>{alert.detail}</small></span>
-              <ArrowUpRight size={16} />
-            </button>
-          ))}
-        </div>
-      ) : <p className="overview-empty-alerts">Nenhum conflito detectado nesta semana.</p>}
-      {alerts.length > 4 && <p className="overview-more-alerts">Mostrando 4 de {alerts.length} alertas desta semana.</p>}
-    </section>
-  );
-}
-
 export function OverviewPage({
   items, loads, alerts, suggestions, selectedCell, sourceInfo, sourceError, syncing,
-  onSelectCell, onOpenTask, onApplySuggestion, onAlertSelect, onRefresh,
+  onSelectCell, onOpenTask, onReviewSuggestion, onAlertSelect, onRefresh,
   onNavigatePlanning,
 }: OverviewPageProps) {
   const { week: currentWeek } = overviewPeriod();
   const [selectedWeek, setSelectedWeek] = useState(currentWeek);
   const weekLoads = loads.filter(cell => cell.week === selectedWeek);
+  const alertWeeks = new Set(alerts.map((alert) => alert.week));
   const selectedLoad = weekLoads.find(cell => cell.personId === selectedCell.personId) ?? weekLoads[0];
   const weekAlerts = alerts.filter(alert => alert.week === selectedWeek);
   const overloaded = weekLoads.filter(cell => cell.planned > cell.capacity);
-  const totalPlanned = weekLoads.reduce((sum, cell) => sum + cell.planned, 0);
+  const totalPlanned = items
+    .filter((item) => item.plannedWeek === selectedWeek && item.status !== "Concluído")
+    .reduce((sum, item) => sum + item.hours, 0);
+  const unassignedHours = items
+    .filter((item) => item.plannedWeek === selectedWeek && item.plannedPersonId === "sem-responsavel" && item.status !== "Concluído")
+    .reduce((sum, item) => sum + item.hours, 0);
   const availableHours = weekLoads.reduce((sum, cell) => sum + cell.capacity, 0);
   const selectedSuggestion = suggestions.find(suggestion =>
     suggestion.fromPersonId === selectedLoad.personId && suggestion.fromWeek === selectedWeek);
@@ -338,9 +315,9 @@ export function OverviewPage({
 
   return (
     <>
-      <div className="page-heading">
+      <div className="page-heading overview-page-heading">
         <div>
-          <div className="eyebrow">VISÃO GERAL <span>·</span> {selectedWeek === currentWeek ? "SEMANA ATUAL" : "SEMANA SELECIONADA"} · {weeks[selectedWeek].label.toUpperCase()}</div>
+          <div className="eyebrow">VISÃO GERAL</div>
           <h1>Onde a equipe precisa de atenção?</h1>
           <p>Escolha uma semana para analisar a ocupação da equipe e revisar possíveis ajustes.</p>
         </div>
@@ -361,20 +338,33 @@ export function OverviewPage({
         <span className="source-status"><i /> {sourceInfo ? `Atualizado ${timeLabel(sourceInfo.syncedAt)}` : sourceError ? "Falha na consulta" : "Conectando"}</span>
       </div>
 
+      <div className="section-kicker overview-metrics-title">
+        {selectedWeek === currentWeek ? "SEMANA ATUAL" : "SEMANA SELECIONADA"} · {weeks[selectedWeek].label.toUpperCase()}
+      </div>
       <div className="metric-grid">
         <MetricCard icon={Layers3} tone="violet" label="Projetos ativos" value={String(projects.length)} detail="Em 2 produtos" />
         <MetricCard icon={UsersRound} tone="teal" label="Profissionais" value={String(people.length)} detail="Capacidade da equipe" />
-        <MetricCard icon={Activity} tone="amber" label="Carga na semana" value={`${formatHours(totalPlanned)}h`} detail={`de ${formatHours(availableHours)}h disponíveis`} />
+        <MetricCard icon={Activity} tone="amber" label="Carga na semana" value={`${formatHours(totalPlanned)}h`} detail={`de ${formatHours(availableHours)}h disponíveis${unassignedHours ? ` · ${formatHours(unassignedHours)}h sem responsável` : ""}`} />
         <MetricCard icon={AlertCircle} tone="red" label="Pessoas sobrecarregadas" value={String(overloaded.length)} detail={overloaded.length ? "Na semana selecionada" : "Nenhuma nesta semana"} />
       </div>
 
-      <WeekAlerts alerts={weekAlerts} week={selectedWeek} onAlertSelect={selectAlert} />
+      {weekAlerts.length > 0 && (
+        <AlertCard
+          className="overview-priorities"
+          alerts={weekAlerts}
+          eyebrow={`PRIORIDADES · ${weeks[selectedWeek].label.toUpperCase()}`}
+          emptyMessage="Nenhum conflito detectado nesta semana."
+          maxVisible={4}
+          onAlertSelect={selectAlert}
+        />
+      )}
 
       <div className="overview-focus-grid">
         <CapacityHeatmap
           cells={weekLoads}
           selectedPersonId={selectedLoad.personId}
           week={selectedWeek}
+          alertWeeks={alertWeeks}
           onSelect={onSelectCell}
           onWeekChange={selectWeek}
           onNavigatePlanning={onNavigatePlanning}
@@ -383,7 +373,7 @@ export function OverviewPage({
           cell={selectedLoad}
           suggestion={selectedSuggestion}
           week={selectedWeek}
-          onReviewSuggestion={onApplySuggestion}
+          onReviewSuggestion={onReviewSuggestion}
           onOpenTask={onOpenTask}
           onNavigatePlanning={onNavigatePlanning}
         />

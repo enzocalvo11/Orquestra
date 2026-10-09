@@ -1,8 +1,8 @@
 import { useEffect } from "react";
 import { AlertCircle, ArrowRight, CalendarDays, Check, Clock3, X } from "lucide-react";
 import { ProjectTag } from "../../components/common/ProjectTag";
-import { people, weeks, type WorkItem } from "../../data/demo-data";
-import { formatHours, getPerson, loadFor, type PlannedItem } from "../../lib/planning";
+import { people, UNASSIGNED_PERSON_ID, weeks, type WorkItem } from "../../data/demo-data";
+import { formatHours, getPerson, loadFor, type PlannedItem, type Suggestion } from "../../lib/planning";
 
 const typeName: Record<WorkItem["type"], string> = {
   Task: "Tarefa",
@@ -13,6 +13,7 @@ const typeName: Record<WorkItem["type"], string> = {
 interface TaskDialogProps {
   task: PlannedItem;
   items: PlannedItem[];
+  suggestion?: Suggestion;
   draftPerson: string;
   draftWeek: number;
   busy: boolean;
@@ -22,11 +23,13 @@ interface TaskDialogProps {
   onDraftWeekChange: (week: number) => void;
   onClose: () => void;
   onSave: () => void;
+  onViewInPlanning: (taskId: string) => void;
 }
 
 export function TaskDialog({
   task,
   items,
+  suggestion,
   draftPerson,
   draftWeek,
   busy,
@@ -36,6 +39,7 @@ export function TaskDialog({
   onDraftWeekChange,
   onClose,
   onSave,
+  onViewInPlanning,
 }: TaskDialogProps) {
   const changed = draftPerson !== task.plannedPersonId || draftWeek !== task.plannedWeek;
   const source = loadFor(items, task.plannedPersonId, task.plannedWeek);
@@ -81,6 +85,15 @@ export function TaskDialog({
           <span><small>PRIORIDADE</small><strong>{task.priority}</strong></span>
           <span><small>STATUS</small><strong>{task.status}</strong></span>
         </div>
+        {suggestion && (
+          <div className="modal-suggestion">
+            <strong>Ajuste disponível</strong>
+            <p>{suggestion.reason}</p>
+            <span>Destino sugerido: {getPerson(suggestion.toPersonId)?.name} · {weeks[suggestion.toWeek].label}</span>
+          </div>
+        )}
+        {deferSave ? (
+          <>
         <div className="modal-divider" />
         <h3>Propor realocação</h3>
         <p className="modal-helper">
@@ -92,9 +105,11 @@ export function TaskDialog({
           <label>
             Responsável
             <select value={draftPerson} onChange={(event) => onDraftPersonChange(event.target.value)}>
+              {task.plannedPersonId === UNASSIGNED_PERSON_ID && (
+                <option value={UNASSIGNED_PERSON_ID}>Sem responsável · ainda não atribuído</option>
+              )}
               {people
-                .filter((person) => person.id !== "sem-responsavel" &&
-                  (allowAnyPerson || person.skills.includes(task.skill)))
+                .filter((person) => allowAnyPerson || person.skills.includes(task.skill))
                 .map((person) => (
                   <option key={person.id} value={person.id}>{person.name} · {person.role}</option>
                 ))}
@@ -110,7 +125,7 @@ export function TaskDialog({
         {changed && (
           <div className="modal-impact">
             <strong>Impacto previsto</strong>
-            <p>{getPerson(task.plannedPersonId)?.name} · {weeks[task.plannedWeek].label}: {formatHours(source.planned)}h → {formatHours(source.planned - hours)}h de {formatHours(source.capacity)}h</p>
+            <p>{getPerson(task.plannedPersonId)?.name ?? "Sem responsável"} · {weeks[task.plannedWeek].label}: {formatHours(source.planned)}h → {formatHours(source.planned - hours)}h de {formatHours(source.capacity)}h</p>
             <p>{getPerson(draftPerson)?.name} · {weeks[draftWeek].label}: {formatHours(target.planned)}h → {formatHours(targetAfter)}h de {formatHours(target.capacity)}h</p>
             {targetAfter > target.capacity && <span>Essa mudança deixará o destino acima da capacidade.</span>}
           </div>
@@ -135,6 +150,15 @@ export function TaskDialog({
               : deferSave ? "Aplicar à prévia" : "Confirmar realocação"}
           </button>
         </div>
+          </>
+        ) : (
+          <div className="modal-actions">
+            <button className="secondary-button" onClick={onClose}>Fechar</button>
+            <button className="primary-button" onClick={() => onViewInPlanning(task.id)}>
+              Visualizar no planejamento
+            </button>
+          </div>
+        )}
       </section>
     </div>
   );

@@ -120,6 +120,10 @@ export default function Dashboard({ initialChanges }: DashboardProps) {
   const [selectedProject, setSelectedProject] = useState("all");
   const [selectedCell, setSelectedCell] = useState<CapacitySelection>(() => ({ personId: "ana", week: overviewPeriod().week }));
   const [taskId, setTaskId] = useState<string | null>(null);
+  const [highlightedTaskId, setHighlightedTaskId] = useState<string | null>(null);
+  const [highlightedCell, setHighlightedCell] = useState<CapacitySelection | null>(null);
+  const [highlightedCellKind, setHighlightedCellKind] = useState<"alert" | "recommendation" | null>(null);
+  const [activeSuggestion, setActiveSuggestion] = useState<Suggestion | null>(null);
   const [draftPerson, setDraftPerson] = useState("ana");
   const [draftWeek, setDraftWeek] = useState(0);
   const [dragTaskId, setDragTaskId] = useState<string | null>(null);
@@ -155,88 +159,29 @@ export default function Dashboard({ initialChanges }: DashboardProps) {
     if (!task) return;
 
     setTaskId(id);
+    setActiveSuggestion(null);
+    if (view === "planning") {
+      setHighlightedTaskId(id);
+      if (highlightedCellKind !== "recommendation") {
+        setHighlightedCell(null);
+        setHighlightedCellKind(null);
+      }
+    }
     setDraftPerson(task.plannedPersonId);
     setDraftWeek(task.plannedWeek);
   }
 
-  async function moveTask(id: string, personId: string, weekIndex: number) {
-    if (busy) return;
-
+  function viewTaskInPlanning(id: string) {
     const task = items.find((item) => item.id === id);
     if (!task) return;
-
-    const person = getPerson(personId);
-    if (!person?.skills.includes(task.skill)) {
-      setNotice(skillMismatchMessage(person?.name ?? "Este profissional", task.skill));
-      return;
-    }
-
-    if (task.plannedPersonId === personId && task.plannedWeek === weekIndex) {
-      setTaskId(null);
-      return;
-    }
-
-    const allocationChanged = task.plannedPersonId !== personId || task.plannedWeek !== weekIndex;
-    setBusy(true);
-    try {
-      if (task.personId !== personId) {
-        if (!Number.isSafeInteger(task.externalId) || task.externalId <= 0) {
-          throw new Error("Esta tarefa não tem um ID do Azure DevOps válido.");
-        }
-        await updateAzureResponsible(task.externalId, personId);
-        if (!(await syncSource(true))) {
-          throw new Error("A tag foi atualizada no Azure DevOps, mas não foi possível recarregar os Work Items. Atualize a lista antes de continuar.");
-        }
-      }
-
-      if (!allocationChanged) {
-        setTaskId(null);
-        setNotice(`${task.title}: prazo atualizado nas tags do Azure DevOps.`);
-        return;
-      }
-
-      const response = await fetch("/api/plan", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          taskId: id,
-          personId,
-          weekIndex,
-          notificationChanges: [{
-            taskId: id,
-            previousPersonId: task.plannedPersonId,
-            previousWeekIndex: task.plannedWeek,
-            nextPersonId: personId,
-            nextWeekIndex: weekIndex,
-          } satisfies PlanningTransition],
-        }),
-      });
-      const data = await response.json() as PlanApiResponse;
-
-      if (!response.ok) throw new Error(data.error ?? "Falha ao salvar.");
-      if (!Array.isArray(data.changes)) {
-        throw new Error("A realocação não foi confirmada pelo servidor. Tente novamente.");
-      }
-
-      const savedChange = data.changes.find((change) => change.taskId === id);
-      const savedPersonId = savedChange?.personId ?? personId;
-      const savedWeekIndex = savedChange?.weekIndex ?? task.week;
-      if (savedPersonId !== personId || savedWeekIndex !== weekIndex) {
-        throw new Error("O destino solicitado não foi gravado. Tente novamente.");
-      }
-
-      setChanges(data.changes);
-      setDraftChanges(data.changes);
-      setShowSavedIndicator(false);
-      setSelectedCell({ personId, week: weekIndex });
-      setNotice(savedNotice(`${task.title} realocada. A capacidade foi recalculada.`, data.notification));
-      setTaskId(null);
-    } catch (error) {
-      setNotice(error instanceof Error ? error.message : "Não foi possível salvar a mudança.");
-    } finally {
-      setBusy(false);
-      setDragTaskId(null);
-    }
+    const suggestion = activeSuggestion?.taskId === id ? activeSuggestion : null;
+    setHighlightedTaskId(id);
+    setHighlightedCell(suggestion ? { personId: suggestion.toPersonId, week: suggestion.toWeek } : null);
+    setHighlightedCellKind(suggestion ? "recommendation" : null);
+    if (suggestion) setSelectedCell({ personId: suggestion.toPersonId, week: suggestion.toWeek });
+    setActiveSuggestion(null);
+    setTaskId(null);
+    setView("planning");
   }
 
   function stageTaskMove(id: string, personId: string, weekIndex: number) {
@@ -265,6 +210,9 @@ export default function Dashboard({ initialChanges }: DashboardProps) {
     if (!originalTask) return;
 
     const nextChanges = draftChanges.filter((change) => change.taskId !== id);
+    setHighlightedTaskId(null);
+    setHighlightedCell(null);
+    setHighlightedCellKind(null);
     if (originalTask.personId !== personId || originalTask.week !== weekIndex) {
       nextChanges.push({ taskId: id, personId, weekIndex });
     }
@@ -348,6 +296,9 @@ export default function Dashboard({ initialChanges }: DashboardProps) {
       setChanges([]);
       setDraftChanges([]);
       setShowSavedIndicator(false);
+      setHighlightedTaskId(null);
+      setHighlightedCell(null);
+      setHighlightedCellKind(null);
       setNotice(savedNotice("Planejamento original restaurado.", data.notification));
     } catch {
       setNotice("Não foi possível restaurar o planejamento.");
@@ -405,6 +356,11 @@ export default function Dashboard({ initialChanges }: DashboardProps) {
     event.dataTransfer.setData("text/plain", id);
     event.dataTransfer.effectAllowed = "move";
     setDragTaskId(id);
+    setHighlightedTaskId(id);
+    if (highlightedCellKind !== "recommendation") {
+      setHighlightedCell(null);
+      setHighlightedCellKind(null);
+    }
   }
 
   function dropTask(event: DragEvent<HTMLElement>, personId: string, weekIndex: number) {
@@ -420,19 +376,46 @@ export default function Dashboard({ initialChanges }: DashboardProps) {
       setNotice("Salve ou cancele as alterações pendentes antes de sair do Planejamento.");
       return;
     }
+    if (view === "planning" && nextView !== "planning") {
+      setHighlightedTaskId(null);
+      setHighlightedCell(null);
+      setHighlightedCellKind(null);
+    }
     setView(nextView);
   }
 
-  function handleAlertSelect(alert: (typeof alerts)[number]) {
+  function focusAlertInPlanning(alert: (typeof alerts)[number]) {
     setSelectedCell({ personId: alert.personId, week: alert.week });
+    if (alert.taskId) {
+      setHighlightedTaskId(alert.taskId);
+      setHighlightedCell(null);
+      setHighlightedCellKind(null);
+    } else {
+      setHighlightedTaskId(null);
+      setHighlightedCell({ personId: alert.personId, week: alert.week });
+      setHighlightedCellKind("alert");
+    }
+    setTaskId(null);
+    setActiveSuggestion(null);
+    setView("planning");
+  }
+
+  function handleAlertSelect(alert: (typeof alerts)[number]) {
+    if (alert.kind === "deadline" || alert.kind === "overload") {
+      focusAlertInPlanning(alert);
+      return;
+    }
     if (alert.taskId) openTask(alert.taskId);
     else document.getElementById("overview-capacity-detail")?.scrollIntoView({
       behavior: "smooth", block: "nearest",
     });
   }
 
-  function applySuggestion(suggestion: Suggestion) {
-    openTask(suggestion.taskId);
+  function reviewSuggestion(suggestion: Suggestion) {
+    const task = items.find((item) => item.id === suggestion.taskId);
+    if (!task) return;
+    setActiveSuggestion(suggestion);
+    setTaskId(task.id);
     setDraftPerson(suggestion.toPersonId);
     setDraftWeek(suggestion.toWeek);
   }
@@ -446,7 +429,7 @@ export default function Dashboard({ initialChanges }: DashboardProps) {
       />
 
       <div className="content-shell">
-        <Topbar view={view} alertCount={alerts.length} />
+        <Topbar view={view} />
         <main className="main-content">
           {view === "overview" && (
             <OverviewPage
@@ -460,7 +443,7 @@ export default function Dashboard({ initialChanges }: DashboardProps) {
               syncing={syncing}
               onSelectCell={setSelectedCell}
               onOpenTask={openTask}
-              onApplySuggestion={applySuggestion}
+              onReviewSuggestion={reviewSuggestion}
               onAlertSelect={handleAlertSelect}
               onRefresh={() => void syncSource()}
               onNavigatePlanning={() => setView("planning")}
@@ -477,6 +460,10 @@ export default function Dashboard({ initialChanges }: DashboardProps) {
           {view === "planning" && (
             <PlanningPage
               items={items}
+              highlightedTaskId={highlightedTaskId}
+              highlightedCell={highlightedCell}
+              highlightedCellKind={highlightedCellKind}
+              alerts={alerts}
               changeCount={changes.length}
               pendingChangeCount={pendingChangeCount}
               hasPendingChanges={hasPendingChanges}
@@ -487,6 +474,7 @@ export default function Dashboard({ initialChanges }: DashboardProps) {
               onCancelChanges={cancelPlanChanges}
               onSaveChanges={() => void savePlanChanges()}
               onOpenTask={openTask}
+              onAlertSelect={focusAlertInPlanning}
               onDragStart={startDrag}
               onDragEnd={() => setDragTaskId(null)}
               onDrop={dropTask}
@@ -499,16 +487,16 @@ export default function Dashboard({ initialChanges }: DashboardProps) {
         <TaskDialog
           task={activeTask}
           items={items}
+          suggestion={activeSuggestion?.taskId === activeTask.id ? activeSuggestion : undefined}
           draftPerson={draftPerson}
           draftWeek={draftWeek}
           busy={busy}
           deferSave={view === "planning"}
           onDraftPersonChange={setDraftPerson}
           onDraftWeekChange={setDraftWeek}
-          onClose={() => setTaskId(null)}
-          onSave={() => void (view === "planning"
-            ? stageTaskMove(activeTask.id, draftPerson, draftWeek)
-            : moveTask(activeTask.id, draftPerson, draftWeek))}
+          onClose={() => { setTaskId(null); setActiveSuggestion(null); }}
+          onSave={() => stageTaskMove(activeTask.id, draftPerson, draftWeek)}
+          onViewInPlanning={viewTaskInPlanning}
         />
       )}
       {notice && <NoticeToast message={notice} onClose={() => setNotice("")} />}

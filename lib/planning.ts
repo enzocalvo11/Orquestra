@@ -1,6 +1,6 @@
 import {
   absences, holidayDays, people, projects, weeks, workItems,
-  type Person, type PlanChange, type Skill, type WorkItem,
+  type Person, type PlanChange, type Skill, type WorkItem, UNASSIGNED_PERSON_ID,
 } from "../data/demo-data";
 
 const skillLabels: Record<Skill, string> = {
@@ -72,12 +72,13 @@ export function capacityFor(person: Person, week: number): number {
 }
 
 export function loadFor(items: PlannedItem[], personId: string, week: number): LoadCell {
-  const person = getPerson(personId)!;
+  const person = getPerson(personId);
   const tasks = items.filter(task =>
     task.plannedPersonId === personId && task.plannedWeek === week && task.status !== "Concluído",
   );
   const planned = tasks.reduce((sum, task) => sum + task.hours, 0);
-  const capacity = capacityFor(person, week);
+  // Unassigned work has no employee capacity; it stays visible as an assignment queue.
+  const capacity = person ? capacityFor(person, week) : 0;
   return {
     personId, week, planned, capacity,
     percent: capacity === 0 ? (planned ? 999 : 0) : Math.round(planned / capacity * 100),
@@ -133,7 +134,7 @@ export function getSuggestions(items: PlannedItem[]): Suggestion[] {
     let chosen: Suggestion | null = null;
     for (const task of tasks) {
       const candidates = people
-        .filter(person => person.id !== source.id && person.id !== "sem-responsavel" && person.skills.includes(task.skill))
+        .filter(person => person.id !== source.id && person.id !== UNASSIGNED_PERSON_ID && person.skills.includes(task.skill))
         .map(person => ({ person, free: capacityFor(person, cell.week) - loadFor(items, person.id, cell.week).planned }))
         .filter(candidate => candidate.free >= task.hours)
         .sort((a, b) =>
