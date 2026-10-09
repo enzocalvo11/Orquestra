@@ -27,7 +27,6 @@ Este documento descreve o protótipo atual. O objetivo é manter a interface, as
 | `features/overview/` | Resumo, alertas e sugestões. |
 | `features/timelines/` | Itens organizados por projeto e prazo. |
 | `features/planning/` | Quadro semanal de alocação. |
-| `features/team/` | Visão dos profissionais e habilidades. |
 | `features/work-items/` | Detalhe e edição de uma atividade. |
 | `components/` | Elementos visuais compartilhados entre funcionalidades. |
 | `data/demo-data.ts` | Dados fictícios que simulam a fonte de work items. |

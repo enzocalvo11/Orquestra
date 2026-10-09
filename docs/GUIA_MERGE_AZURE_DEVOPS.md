@@ -4,7 +4,7 @@ Este documento descreve as alteracoes presentes na working tree desta branch par
 
 ## Objetivo da branch
 
-Conectar projetos e Work Items do Azure DevOps ao Orquestra, manter o cadastro interno de equipe e capacidade no projeto, sincronizar a atribuicao ficticia por tags e permitir realocacoes no planejamento sem bloquear a escolha por habilidade.
+Conectar projetos e Work Items do Azure DevOps ao Orquestra, manter o cadastro interno de equipe e capacidade no projeto, sincronizar a atribuicao ficticia por tags e permitir realocacoes no planejamento, sempre respeitando a habilidade exigida pela atividade.
 
 O Azure DevOps e a fonte dos projetos e dos Work Items. O D1 continua guardando alteracoes locais de planejamento, principalmente a semana planejada. Dados internos sem equivalente no Azure — como habilidades, capacidade semanal e ausencias — continuam em `data/demo-data.ts`.
 
@@ -57,15 +57,19 @@ As chamadas ao Azure e o PAT ficam no backend/Worker. O frontend recebe apenas d
 
 ### 3. Planejamento e realocacoes
 
-- O quadro permite arrastar qualquer Work Item para qualquer profissional real e qualquer uma das quatro semanas exibidas, sem bloquear por diferenca entre habilidade e atividade.
-- O modal de tarefa oferece todos os profissionais internos na aba Planejamento. Nas outras telas, permanece o filtro atual por habilidade.
+- O quadro permite arrastar um Work Item para qualquer uma das quatro semanas exibidas, mas somente para profissionais que tenham a habilidade exigida pela atividade (`person.skills` inclui `task.skill`).
+- Enquanto uma atividade e arrastada, as celulas de quem nao tem a habilidade ficam apagadas. Ao soltar nessas celulas nada e movido e um aviso no canto explica o motivo (`skillMismatchMessage` em `lib/planning.ts`, por exemplo: "Ana Costa nao tem a competencia de Backend para esta atividade."). O estado de arraste e limpo no proprio drop, porque o cartao movido pode deixar de existir antes do evento `dragend`.
+- Durante o arraste, a pagina rola sozinha quando o ponteiro chega perto do topo ou do rodape (`features/planning/useDragAutoScroll.ts`; a faixa de ativacao e a constante `EDGE_ZONE_PX`).
+- O modal de tarefa lista apenas profissionais com a habilidade exigida, tanto no Planejamento quanto nas outras telas. A propriedade `allowAnyPerson` do `TaskDialog` continua disponivel, mas nao e usada pelo dashboard.
 - A linha `Sem responsavel` pode exibir atividades sem tag, mas nao e um destino de atribuicao.
 - Mover para uma semana posterior ao prazo e permitido; a interface continua mostrando o aviso de prazo.
 - As quatro semanas sao o horizonte atualmente suportado pelo quadro e pelo `weekIndex` do D1. Esta branch nao adiciona datas arbitrarias fora desse horizonte.
-- `PUT /api/plan` valida tarefa, profissional e semana e nao rejeita a realocacao por habilidade. A rota `POST /api/plan`, usada pelo fluxo imediato fora do planejamento, ainda mantem a validacao de habilidade existente.
+- `PUT /api/plan` valida tarefa, profissional, semana e habilidade; `POST /api/plan`, usada pelo fluxo imediato fora do planejamento, aplica a mesma validacao de habilidade. As mensagens de erro usam `skillMismatchMessage`, o mesmo texto do aviso na interface.
 - O responsavel atual vem do Azure. O D1 guarda as alteracoes de planejamento; uma atribuicao de responsavel feita no Azure nao deve ser reapresentada como se precisasse ser persistida novamente no D1.
 - Depois de atualizar o responsavel no Azure, o dashboard calcula quais alteracoes ainda diferem da fonte atual para conferir o resultado do `PUT /api/plan`. Isso evita erro falso quando a unica mudanca foi a tag de responsavel e a API corretamente normalizou a lista local para vazia.
-- As sugestoes automaticas continuam respeitando habilidades e capacidade. A permissao de escolha livre aplica-se a acao manual na aba Planejamento.
+- As sugestoes automaticas e as acoes manuais respeitam habilidades; nao ha escolha livre de profissional fora da competencia exigida.
+- A linha `Sem responsavel` nao aceita atividades: soltar um cartao nela mostra o aviso "Nao e possivel mover a atividade para \"Sem responsavel\"".
+- O Planejamento tem lista de projetos de cada pessoa abaixo do cargo e a cor do projeto na borda dos cartoes. A tela Equipe e a lista de projetos da barra lateral foram removidas.
 
 ## Arquivos alterados e criados nesta working tree
 
@@ -83,7 +87,7 @@ As chamadas ao Azure e o PAT ficam no backend/Worker. O frontend recebe apenas d
 - `README.md`: documenta fonte Azure, configuracao e fluxo de atribuicao.
 - `docs/architecture.md`: atualiza a arquitetura e os fluxos de fonte/atribuicao.
 - `app/api/source/route.ts`: consulta Azure e retorna Work Items/projetos, metadados de fonte e erros seguros.
-- `app/api/plan/route.ts`: valida planejamento contra Work Items carregados do Azure; PUT permite realocacoes sem restricao por habilidade.
+- `app/api/plan/route.ts`: valida planejamento contra Work Items carregados do Azure; PUT e POST validam a habilidade do profissional.
 - `data/demo-data.ts`: separa pessoas/projetos/Work Items suplementares e mantem a fonte Azure carregada em variaveis substituiveis.
 - `features/dashboard/types.ts`: amplia o tipo de resposta da fonte.
 - `features/dashboard/Dashboard.tsx`: carrega/recarrega Azure, coordena atribuicao, realocacao e sincronizacao, distingue rascunhos do planejamento e dados ja refletidos no Azure.
@@ -119,7 +123,7 @@ O PAT precisa ler e atualizar Work Items. Nao copiar seu valor para `.dev.vars.e
 6. Nao remover `.dev.vars` do `.gitignore` nem adicionar credenciais a configuracao versionada.
 7. Nao aceitar silenciosamente sucesso do PATCH: a resposta do GET de confirmacao deve conter uma unica tag `responsavel:` correspondente ao destino.
 8. D1 permanece necessario para o planejamento local. Nao excluir `plan_changes` nem substituir a persistencia sem uma decisao separada.
-9. O endpoint PUT e usado para salvar em lote no Planejamento; POST e usado por outro fluxo e ainda possui validacao de habilidade. Preservar essa diferenca, a menos que a regra de negocio seja alterada explicitamente.
+9. O endpoint PUT e usado para salvar em lote no Planejamento; POST e usado por outro fluxo. Ambos validam a habilidade do profissional e devem continuar assim, a menos que a regra de negocio seja alterada explicitamente.
 
 ## Validacao executada
 

@@ -5,9 +5,10 @@ Protótipo de apoio à gestão de projetos: reúne tarefas de diferentes projeto
 ## O que já funciona
 
 - Dados fictícios no formato de work items do Azure DevOps: projetos, tarefas, bugs, testes, responsáveis, habilidades, estimativas e prazos.
-- Visão de portfólio, timelines por projeto, capacidade semanal e equipe.
+- Visão de portfólio, timelines por projeto e capacidade semanal.
 - Alertas e sugestões de realocação calculadas a partir de habilidades, capacidade disponível e prazo.
 - Realocação por formulário ou arrastar e soltar; as alterações de planejamento ficam registradas em D1 e podem ser restauradas.
+- No Planejamento, uma atividade só pode ser movida para quem tem a habilidade exigida. Durante o arraste, as células de quem não tem a habilidade ficam apagadas; ao soltar nelas, um aviso no canto explica o motivo. Cada pessoa mostra os projetos em que atua, e a cor do projeto aparece na borda dos cartões. A página rola sozinha quando o cartão é arrastado perto do topo ou do rodapé.
 
 ## Estado da integração
 
