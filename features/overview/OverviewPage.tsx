@@ -33,15 +33,44 @@ interface OverviewPageProps {
 const timeLabel = (value: string) =>
   new Date(value).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
 
-// Continuous scale: free is green; increasingly occupied moves through lime,
-// yellow and orange to red. Values over 140% retain their exact percentage.
-function heatStyle(percent: number): CSSProperties {
-  const hue = Math.round(145 * (1 - Math.min(Math.max(percent, 0), 140) / 140));
+const heatStops = [
+  { at: 0, color: [31, 152, 89] },
+  { at: 60, color: [147, 201, 78] },
+  { at: 78, color: [227, 200, 62] },
+  { at: 100, color: [231, 131, 69] },
+] as const;
+
+function colorAt(percent: number): number[] {
+  const value = Math.min(Math.max(percent, 0), 100);
+  const upperIndex = heatStops.findIndex(stop => stop.at >= value);
+  const upper = heatStops[upperIndex < 0 ? heatStops.length - 1 : upperIndex];
+  const lower = heatStops[Math.max(upperIndex - 1, 0)];
+  const progress = upper.at === lower.at ? 0 : (value - lower.at) / (upper.at - lower.at);
+
+  return upper.color.map((channel, index) =>
+    Math.round(lower.color[index] + (channel - lower.color[index]) * progress),
+  );
+}
+
+function toHex(color: number[]): string {
+  return `#${color.map(channel => channel.toString(16).padStart(2, "0")).join("")}`;
+}
+
+function mixWithWhite(color: number[], amount: number): string {
+  return toHex(color.map(channel => Math.round(channel + (255 - channel) * amount)));
+}
+
+function darken(color: number[], amount: number): string {
+  return toHex(color.map(channel => Math.round(channel * (1 - amount))));
+}
+
+function heatStyle(cell: LoadCell): CSSProperties {
+  const color = cell.planned > cell.capacity ? [182, 75, 84] : colorAt(cell.percent);
+
   return {
-    "--heat-bg": `hsl(${hue} 80% 94%)`,
-    "--heat-border": `hsl(${hue} 62% 76%)`,
-    "--heat-strong": `hsl(${hue} 73% 39%)`,
-    "--heat-text": `hsl(${hue} 57% 25%)`,
+    "--heat-bg": mixWithWhite(color, 0.46),
+    "--heat-border": mixWithWhite(color, 0.25),
+    "--heat-accent": darken(color, 0.4),
   } as CSSProperties;
 }
 
@@ -90,7 +119,7 @@ function CapacityHeatmap({
             <button
               key={person.id}
               className={`overview-heat-tile ${selectedPersonId === person.id ? "is-selected" : ""}`}
-              style={heatStyle(cell.percent)}
+              style={heatStyle(cell)}
               onClick={() => onSelect({ personId: person.id, week })}
               aria-pressed={selectedPersonId === person.id}
               aria-controls="overview-capacity-detail"
@@ -108,7 +137,7 @@ function CapacityHeatmap({
         })}
       </div>
       <div className="overview-heatmap-footer">
-        <div className="overview-scale" aria-label="Escala: livre em verde, próximo do limite em amarelo e acima da capacidade em vermelho">
+        <div className="overview-scale" aria-label="Escala contínua de verde a amarelo e laranja conforme a ocupação aumenta; vermelho escuro indica carga acima da capacidade">
           <span>Livre</span><i /><span>No limite</span><span>Excesso</span>
         </div>
         <button onClick={onNavigatePlanning}>Ver planejamento completo <ArrowRight size={15} /></button>
@@ -118,17 +147,19 @@ function CapacityHeatmap({
 }
 
 function CapacityDetail({
-  cell, suggestion, week, onReviewSuggestion, onNavigatePlanning,
+  cell, suggestion, week, onReviewSuggestion, onOpenTask, onNavigatePlanning,
 }: {
   cell: LoadCell;
   suggestion?: Suggestion;
   week: number;
   onReviewSuggestion: (suggestion: Suggestion) => void;
+  onOpenTask: (taskId: string) => void;
   onNavigatePlanning: () => void;
 }) {
   const person = getPerson(cell.personId)!;
   const absence = absences[person.id]?.[week] ?? 0;
   const status = cell.planned > cell.capacity ? "danger" : cell.percent >= 80 ? "caution" : "good";
+  const tasks = [...cell.tasks].sort((a, b) => a.title.localeCompare(b.title, "pt-BR"));
   return (
     <aside id="overview-capacity-detail" className="surface overview-detail" aria-live="polite">
       <div className="section-kicker">DETALHE DA CAPACIDADE</div>
@@ -141,10 +172,33 @@ function CapacityDetail({
         <div><strong>{formatHours(cell.planned)}h</strong><span>Planejadas</span></div>
         <div><strong>{formatHours(cell.capacity)}h</strong><span>Disponíveis</span></div>
       </div>
-      <div className={`insight-status ${status}`}>
-        <AlertCircle size={17} /> {loadLabel(cell)}
+      <div className="overview-capacity-notes">
+        <div className={`insight-status ${status}`}>
+          <AlertCircle size={17} /> {loadLabel(cell)}
+        </div>
+        {absence > 0 && (
+          <p className="absence-note">
+            <CalendarDays size={17} />
+            <span>Ausência de {absence}h considerada no cálculo.</span>
+          </p>
+        )}
       </div>
-      {absence > 0 && <p className="absence-note">Ausência de {absence}h considerada no cálculo.</p>}
+      <div className="insight-divider" />
+      <strong className="detail-title">Atividades nesta semana</strong>
+      {tasks.length ? (
+        <div className="insight-tasks">
+          {tasks.map((task) => {
+            const project = getProject(task.projectId);
+            return (
+              <button key={task.id} onClick={() => onOpenTask(task.id)} aria-label={`Abrir atividade: ${task.title}`}>
+                <i style={{ background: project?.color ?? "#cbd5e1" }} />
+                <span>{task.title}<small>{project?.name ?? "Projeto"}</small></span>
+                <b>{formatHours(task.hours)}h</b>
+              </button>
+            );
+          })}
+        </div>
+      ) : <p className="empty-message">Nenhuma atividade atribuída nesta semana.</p>}
       {suggestion ? (
         <div className="insight-suggestion">
           <span>AJUSTE POSSÍVEL</span>
@@ -223,20 +277,20 @@ function WeekActivities({
 }
 
 function WeekAlerts({
-  alerts, week, onAlertSelect, onNavigatePlanning,
+  alerts, week, onAlertSelect,
 }: {
   alerts: Alert[];
   week: number;
   onAlertSelect: (alert: Alert) => void;
-  onNavigatePlanning: () => void;
 }) {
+  if (alerts.length === 0) return null;
+
   return (
     <section className="surface overview-alerts" aria-labelledby="overview-alerts-title">
       <div className="section-heading">
         <div>
           <div className="section-kicker">PRIORIDADES · {weeks[week].label.toUpperCase()}</div>
           <h2 id="overview-alerts-title">Alertas</h2>
-          <p>Abra um alerta para analisar a pessoa ou a atividade envolvida.</p>
         </div>
         <span className="alert-count">{alerts.length} {alerts.length === 1 ? "alerta" : "alertas"}</span>
       </div>
@@ -252,9 +306,6 @@ function WeekAlerts({
         </div>
       ) : <p className="overview-empty-alerts">Nenhum conflito detectado nesta semana.</p>}
       {alerts.length > 4 && <p className="overview-more-alerts">Mostrando 4 de {alerts.length} alertas desta semana.</p>}
-      <button className="overview-section-link" onClick={onNavigatePlanning}>
-        Explorar o planejamento <ArrowRight size={15} />
-      </button>
     </section>
   );
 }
@@ -317,7 +368,7 @@ export function OverviewPage({
         <MetricCard icon={AlertCircle} tone="red" label="Pessoas sobrecarregadas" value={String(overloaded.length)} detail={overloaded.length ? "Na semana selecionada" : "Nenhuma nesta semana"} />
       </div>
 
-      <WeekAlerts alerts={weekAlerts} week={selectedWeek} onAlertSelect={selectAlert} onNavigatePlanning={onNavigatePlanning} />
+      <WeekAlerts alerts={weekAlerts} week={selectedWeek} onAlertSelect={selectAlert} />
 
       <div className="overview-focus-grid">
         <CapacityHeatmap
@@ -333,6 +384,7 @@ export function OverviewPage({
           suggestion={selectedSuggestion}
           week={selectedWeek}
           onReviewSuggestion={onApplySuggestion}
+          onOpenTask={onOpenTask}
           onNavigatePlanning={onNavigatePlanning}
         />
       </div>
