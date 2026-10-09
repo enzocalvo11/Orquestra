@@ -163,7 +163,9 @@ npm run build
 - **Histórico de alterações:** registrar decisões e versões do planejamento para consulta e comparação.
 - **IA de apoio:** evoluir as recomendações e apoiar a análise do gestor, mantendo a revisão humana.
 
-## Participantes
+## Equipe e participantes
+
+**Nome da equipe:** Import Atlas
 
 - Antonio Coelho
 - Enzo Calvo
