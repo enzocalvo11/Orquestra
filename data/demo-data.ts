@@ -7,6 +7,7 @@ export interface Person {
   id: string; name: string; role: string; squad: string;
   weeklyHours: number; skills: Skill[]; color: string;
 }
+export const UNASSIGNED_PERSON_ID = "sem-responsavel";
 export interface Project {
   id: string; name: string; product: string; description: string; color: string;
 }

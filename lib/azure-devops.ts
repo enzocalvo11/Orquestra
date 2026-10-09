@@ -3,6 +3,7 @@ import {
   supplementalProjects as localProjects,
   weeks,
   supplementalWorkItems,
+  UNASSIGNED_PERSON_ID,
   type Person,
   type Project,
   type WorkItem,
@@ -158,7 +159,7 @@ function mapAzureItem(record: AzureWorkItemRecord): WorkItem {
   const tagsResponsavel = getTagValue(tags, "responsavel:") ?? getTagValue(tags, "responsavel-");
   const taggedPerson = tagsResponsavel?.trim().toLowerCase();
   const personId = taggedPerson && localPeople.some(person => person.id === taggedPerson)
-    ? taggedPerson : "sem-responsavel";
+    ? taggedPerson : UNASSIGNED_PERSON_ID;
   const skillValue = getTagValue(tags, "habilidade-") ?? getTagValue(tags, "habilidade:");
   const skill = ["frontend", "backend", "qa", "design"].includes(skillValue ?? "")
     ? skillValue as WorkItem["skill"] : supplemental?.skill ?? "backend";
@@ -258,11 +259,5 @@ export async function getAzureSource(
   }
   const projects = [...projectById.values()];
   const workItems = records.map(record => mapAzureItem(record));
-  const people = localPeople.some(person => person.id === "sem-responsavel")
-    ? localPeople : [...localPeople, {
-      id: "sem-responsavel", name: "Sem responsável", role: "Não atribuído no Azure DevOps",
-      squad: "Sem equipe", weeklyHours: 40, skills: ["frontend", "backend", "qa", "design"] as Person["skills"],
-      color: "#8491a5",
-    }];
-  return { workItems, projects, people, syncedAt: new Date().toISOString() };
+  return { workItems, projects, people: localPeople, syncedAt: new Date().toISOString() };
 }

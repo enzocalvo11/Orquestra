@@ -5,8 +5,9 @@ import {
   Layers3,
   MoveRight,
 } from "lucide-react";
-import { Avatar } from "../common/Avatar";
+import { UserProfileIcon } from "../common/UserProfileIcon";
 import type { DashboardView } from "../../features/dashboard/types";
+import "./sidebar.css";
 
 const navigation = [
   { key: "overview", label: "Visão geral", icon: LayoutDashboard },
@@ -32,20 +33,18 @@ export function Sidebar({
   return (
     <aside className="sidebar">
       <div className="brand">
+        <div className="brand-logo" role="img" aria-label="Orquestra" />
         <div className="brand-mark" aria-hidden="true">
           <span /><span /><span /><span />
-        </div>
-        <div>
-          <strong>Orquestra</strong>
-          <small>GESTÃO EM HARMONIA</small>
         </div>
       </div>
 
       <div className="workspace-select">
         <span className="workspace-icon"><Layers3 size={17} /></span>
-        <span>
-          <strong>Workspace Iport</strong>
-          <small>ImportAtlas / Orquestra2</small>
+        <span className="workspace-details">
+          <small className="workspace-kicker">Workspace</small>
+          <strong>Iport</strong>
+          <span className="workspace-project">ImportAtlas / Orquestra2</span>
         </span>
       </div>
 
@@ -60,7 +59,7 @@ export function Sidebar({
           >
             <Icon size={18} strokeWidth={1.8} aria-hidden="true" />
             {label}
-            {key === "overview" && highAlertCount > 0 && (
+            {key === "planning" && highAlertCount > 0 && (
               <span className="nav-badge">{highAlertCount}</span>
             )}
           </button>
@@ -74,12 +73,11 @@ export function Sidebar({
         <span title="Equipe e capacidade complementares mantidas no projeto"><Info size={14} /></span>
       </div>
       <div className="sidebar-profile">
-        <Avatar personId="ana" />
+        <UserProfileIcon variant="dark" />
         <span>
           <strong>Gestão de projetos</strong>
           <small>Equipe interna</small>
         </span>
-        <span className="profile-dots">•••</span>
       </div>
     </aside>
   );

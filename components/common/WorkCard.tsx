@@ -14,6 +14,7 @@ interface WorkCardProps {
   task: PlannedItem;
   onOpen: (id: string) => void;
   draggable?: boolean;
+  highlighted?: boolean;
   onDragStart?: (event: DragEvent<HTMLElement>, id: string) => void;
   onDragEnd?: () => void;
 }
@@ -22,6 +23,7 @@ export function WorkCard({
   task,
   onOpen,
   draggable = false,
+  highlighted = false,
   onDragStart,
   onDragEnd,
 }: WorkCardProps) {
@@ -29,7 +31,8 @@ export function WorkCard({
 
   return (
     <article
-      className={`work-card ${draggable ? "work-card-draggable" : ""} ${task.isChanged ? "work-card-changed" : ""}`}
+      id={`planning-task-${task.id}`}
+      className={`work-card ${draggable ? "work-card-draggable" : ""} ${task.isChanged ? "work-card-changed" : ""} ${highlighted ? "work-card-highlighted" : ""}`}
       draggable={draggable}
       onDragStart={draggable ? (event) => onDragStart?.(event, task.id) : undefined}
       onDragEnd={onDragEnd}

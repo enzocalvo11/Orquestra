@@ -1,3 +1,112 @@
+.timelines-page-heading .eyebrow,
+.planning-page-heading .eyebrow,
+.planning-surface .section-kicker {
+  color: #2f5f9b;
+}
+
+.planning-alerts .section-kicker {
+  color: #d75d62;
+}
+
+.planning-banner {
+  align-items: flex-start;
+  border-color: #d7e4f2;
+  background: #edf4fc;
+  color: #4e6885;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.planning-banner:hover {
+  border-color: #9bbbe0;
+  background: #e7f0fc;
+}
+
+.planning-banner[role="button"]:focus-visible {
+  outline: 3px solid #4c83c0;
+  outline-offset: 2px;
+}
+
+.planning-banner > .planning-banner-icon:first-child {
+  flex: none;
+  color: #2f5f9b;
+}
+
+.planning-banner-content {
+  min-width: 0;
+  flex: 1;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.planning-banner-content > strong {
+  color: #2f5f9b;
+  font-size: 11px;
+}
+
+.planning-banner-chevron {
+  align-self: center;
+  flex: none;
+  margin-left: auto;
+  color: #2f5f9b;
+  transition: transform 0.15s ease;
+}
+
+.planning-banner-chevron.is-expanded {
+  transform: rotate(180deg);
+}
+
+.planning-banner-collapsed {
+  align-items: center;
+  min-height: 43px;
+  padding-top: 9px;
+  padding-bottom: 9px;
+}
+
+.planning-banner-content p {
+  margin: 4px 0 0;
+  color: #4e6885;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.planning-instructions[hidden],
+.planning-banner-content p[hidden] {
+  display: none;
+}
+
+.planning-instructions {
+  display: grid;
+  gap: 4px;
+  margin: 5px 0 0;
+  padding: 0;
+  list-style: none;
+  color: #4e6885;
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.planning-instructions li {
+  position: relative;
+  padding-left: 16px;
+}
+
+.planning-instructions li::before {
+  position: absolute;
+  top: 0.48em;
+  left: 1px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #3e76b2;
+  content: "";
+}
+
+.planning-instructions strong {
+  color: #2f5f9b;
+  letter-spacing: 0.03em;
+}
+
 .planning-actions {
   display: flex;
   align-items: center;
@@ -73,12 +182,16 @@
 }
 
 .planning-project-filter select {
-  border: 1px solid #dce4ed;
+  border: 1px solid #8db5e1;
   border-radius: 8px;
   padding: 8px 10px;
-  background: #fff;
-  color: #32415a;
+  background: #f4f8ff;
+  color: #2f5f9b;
   font-size: 13px;
+}
+
+.planning-project-filter select:focus-visible {
+  outline-color: #4c83c0;
 }
 
 .planning-empty {
@@ -87,6 +200,52 @@
   font-size: 12px;
   color: #98a6b6;
 }
+
+.work-card-highlighted {
+  background: #e8f2ff;
+  outline: 2px solid #3979bd;
+  outline-offset: 1px;
+  box-shadow: 0 0 0 4px #3979bd26, 0 3px 10px #1d35511a;
+  position: relative;
+  z-index: 1;
+}
+
+.planning-cell-highlighted {
+  background: #fff0f0 !important;
+  box-shadow: inset 0 0 0 2px #c94b5555;
+  border-radius: 6px;
+}
+
+.planning-cell-recommendation {
+  background: #edfaf1 !important;
+  outline: 2px dotted #21804a;
+  outline-offset: -4px;
+  border-radius: 6px;
+}
+
+.legend-dot.recommendation {
+  background: #38a169;
+  outline: 1px dotted #166534;
+  outline-offset: 1px;
+}
+
+.unassigned-queue {
+  margin: 14px;
+  border: 1px solid #f0dfbd;
+  border-radius: 10px;
+  background: #fffbf4;
+  padding: 14px;
+}
+
+.unassigned-queue-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+.unassigned-queue-heading h3 { margin: 0; color: #6e5531; font-size: 12px; }
+.unassigned-queue-heading p { margin: 5px 0 0; color: #917c5b; font-size: 10px; }
+.unassigned-queue-heading > span { color: #9b6b2b; font-size: 10px; font-weight: 750; white-space: nowrap; }
+.unassigned-queue-weeks { display: grid; grid-template-columns: repeat(4, minmax(180px, 1fr)); gap: 8px; }
+.unassigned-queue-week { min-width: 0; display: grid; align-content: start; gap: 8px; padding: 9px; border: 1px solid #f1e8d8; border-radius: 8px; background: #fff; }
+.unassigned-queue-week > strong { color: #88765b; font-size: 10px; }
+
+@media (max-width: 800px) { .unassigned-queue-weeks { grid-template-columns: repeat(2, minmax(180px, 1fr)); } }
 
 .planning-view-tabs {
   display: inline-flex;
@@ -112,7 +271,7 @@
 
 .planning-view-tabs button.active {
   background: #fff;
-  color: #159f9b;
+  color: #4c83c0;
   box-shadow: 0 1px 4px #1d28421a;
 }
 

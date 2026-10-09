@@ -28,7 +28,7 @@ export function TimelinesPage({
 
   return (
     <>
-      <div className="page-heading">
+      <div className="page-heading timelines-page-heading">
         <div>
           <div className="eyebrow">PROJETOS E ENTREGAS</div>
           <h1>Timelines dos projetos</h1>
@@ -93,7 +93,7 @@ export function TimelinesPage({
                                 <strong>{task.title}</strong>
                                 <span className="timeline-task-meta">
                                   <Avatar personId={task.plannedPersonId} small />
-                                  {getPerson(task.plannedPersonId)?.name}
+                                  {getPerson(task.plannedPersonId)?.name ?? "Sem responsável"}
                                   <b>{task.hours}h</b>
                                 </span>
                               </button>
