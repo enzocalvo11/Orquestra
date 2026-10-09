@@ -70,7 +70,7 @@ Hoje:
 
 - `data/demo-data.ts` contém projetos, pessoas, habilidades, capacidade, ausências, semanas e 22 work items fictícios;
 - `GET /api/source` apenas simula uma atualização da fonte;
-- o D1 guarda somente propostas de realocação;
+- o D1 guarda propostas de realocação e contatos de e-mail dos profissionais;
 - a interface recalcula tudo com os dados locais depois de cada mudança;
 - o usuário precisa ser informado de que está vendo uma demonstração.
 
@@ -168,6 +168,10 @@ O banco possui a tabela `plan_changes`:
 | `updated_at` | data da atualização |
 
 Uma atividade possui apenas sua proposta atual. Uma nova mudança atualiza o registro anterior. Restaurar o planejamento apaga as propostas e volta aos dados originais.
+
+O D1 também possui a tabela `employee_contacts`, com `person_id`, `email` e `updated_at`. Ela mantém o endereço de notificação de cada profissional. No cenário do hackathon, os sete profissionais usam `ac242883@alunos.unisanta.br`.
+
+Depois que uma alteração é salva, a aplicação notifica por e-mail as pessoas cujas agendas mudaram. O conteúdo apresenta a transição realizada e a agenda final agrupada por semana. O envio usa o Resend no backend; chaves e remetente são configurados apenas por variáveis de ambiente.
 
 A base local fica em `.wrangler/state` e é independente da base hospedada.
 
@@ -320,6 +324,7 @@ Primeira instalação:
 npm ci
 npm run build
 npx wrangler d1 execute DB --config dist/server/wrangler.json --local --file drizzle/0000_married_adam_warlock.sql --persist-to .wrangler/state
+npx wrangler d1 execute DB --config dist/server/wrangler.json --local --file drizzle/0001_dizzy_medusa.sql --persist-to .wrangler/state
 npm run dev
 ```
 

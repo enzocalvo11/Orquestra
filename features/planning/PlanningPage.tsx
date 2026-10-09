@@ -1,18 +1,17 @@
-import type { CSSProperties, DragEvent } from "react";
+import { useState, type DragEvent } from "react";
 import { Check, Info, RotateCcw, Save } from "lucide-react";
-import { Avatar } from "../../components/common/Avatar";
-import { WorkCard } from "../../components/common/WorkCard";
-import { holidayDays, people, projects, weeks } from "../../data/demo-data";
-import { formatHours, loadFor, type PlannedItem } from "../../lib/planning";
+import { projects } from "../../data/demo-data";
+import type { PlannedItem } from "../../lib/planning";
+import { PeopleByWeek } from "./PeopleByWeek";
+import { ProjectsByWeek } from "./ProjectsByWeek";
 import { useDragAutoScroll } from "./useDragAutoScroll";
 
-// Projects where the person has at least one activity in the current scenario.
-function projectsOf(items: PlannedItem[], personId: string) {
-  const projectIds = new Set(
-    items.filter((task) => task.plannedPersonId === personId).map((task) => task.projectId),
-  );
-  return projects.filter((project) => projectIds.has(project.id));
-}
+type BoardView = "people" | "projects";
+
+const boardViews: ReadonlyArray<{ key: BoardView; label: string }> = [
+  { key: "people", label: "Pessoas × semanas" },
+  { key: "projects", label: "Projetos × semanas" },
+];
 
 interface PlanningPageProps {
   items: PlannedItem[];
@@ -47,6 +46,10 @@ export function PlanningPage({
   onDragEnd,
   onDrop,
 }: PlanningPageProps) {
+  const [boardView, setBoardView] = useState<BoardView>("people");
+  const [selectedProject, setSelectedProject] = useState("all");
+  // Falls back to "all" if the chosen project disappears after the source is refreshed.
+  const projectFilter = projects.some((project) => project.id === selectedProject) ? selectedProject : "all";
   const draggedTask = items.find((task) => task.id === dragTaskId);
   useDragAutoScroll(dragTaskId !== null);
 
@@ -89,7 +92,11 @@ export function PlanningPage({
       <div className="planning-banner">
         <span><Info size={18} /></span>
         <p>
-          <strong>Como usar:</strong> mova os cartões para testar uma nova distribuição. As mudanças só são gravadas ao salvar.
+          {boardView === "people" ? (
+            <><strong>Como usar:</strong> mova os cartões para testar uma nova distribuição. As mudanças só são gravadas ao salvar.</>
+          ) : (
+            <><strong>Visão resumida:</strong> mostra quanto cada projeto consome da equipe por semana. Para mover atividades, volte para Pessoas × semanas.</>
+          )}
         </p>
         <span>{hasPendingChanges ? "Não salvo" : `${changeCount} salvas`}</span>
       </div>
@@ -97,82 +104,57 @@ export function PlanningPage({
       <div className="surface planning-surface">
         <div className="section-heading">
           <div>
-            <div className="section-kicker">QUADRO DE REALOCAÇÃO</div>
-            <h2>Pessoas × semanas</h2>
-          </div>
-          <div className="legend">
-            <span><i className="legend-dot good" /> Espaço livre</span>
-            <span><i className="legend-dot danger" /> Acima do limite</span>
-          </div>
-        </div>
-
-        <div className="planning-scroll">
-          <div className="planning-grid">
-            <div className="planning-grid-head">
-              <div>PROFISSIONAL</div>
-              {weeks.map((week, index) => (
-                <div key={week.label}>
-                  {week.label}
-                  <small>{holidayDays[index] ? "Feriado · 12/10" : "Semana de trabalho"}</small>
-                </div>
-              ))}
+            <div className="section-kicker">
+              {boardView === "people" ? "QUADRO DE REALOCAÇÃO" : "RESUMO POR PROJETO"}
             </div>
-
-            {people.map((person) => (
-              <div className="planning-grid-row" key={person.id}>
-                <div className="planning-person">
-                  <Avatar personId={person.id} />
-                  <strong>{person.name}</strong>
-                  <small>{person.role}</small>
-                  <ul className="planning-person-projects" aria-label={`Projetos de ${person.name}`}>
-                    {projectsOf(items, person.id).map((project) => (
-                      <li key={project.id} style={{ "--project-color": project.color } as CSSProperties}>
-                        <i aria-hidden="true" />
-                        {project.name}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-                {weeks.map((_, week) => {
-                  const cell = loadFor(items, person.id, week);
-                  const canDrop = person.id !== "sem-responsavel" &&
-                    (!draggedTask || person.skills.includes(draggedTask.skill));
-
-                  return (
-                    <div
-                      key={week}
-                      className={`planning-cell ${cell.planned > cell.capacity ? "overloaded" : ""} ${!canDrop ? "drop-disabled" : ""}`}
-                      // Blocked cells still accept the drop so the dashboard can explain why it was refused.
-                      onDragOver={(event) => event.preventDefault()}
-                      onDrop={(event) => onDrop(event, person.id, week)}
-                    >
-                      <div className="planning-cell-head">
-                        <span>{cell.planned} / {formatHours(cell.capacity)}h</span>
-                        <span className={cell.percent > 100 ? "percent-danger" : ""}>{cell.percent}%</span>
-                      </div>
-                      <div className="planning-bar">
-                        <i style={{ width: `${Math.min(cell.percent, 100)}%` }} />
-                      </div>
-                      <div className="planning-tasks">
-                        {cell.tasks.map((task) => (
-                          <WorkCard
-                            key={task.id}
-                            task={task}
-                            draggable
-                            onOpen={onOpenTask}
-                            onDragStart={onDragStart}
-                            onDragEnd={onDragEnd}
-                          />
-                        ))}
-                      </div>
-                      {!cell.tasks.length && <span className="drop-hint">Solte uma atividade aqui</span>}
-                    </div>
-                  );
-                })}
+            <div className="planning-view-controls">
+              <div className="planning-view-tabs" role="tablist" aria-label="Foco do quadro">
+                {boardViews.map(({ key, label }) => (
+                  <button
+                    key={key}
+                    role="tab"
+                    aria-selected={boardView === key}
+                    className={boardView === key ? "active" : ""}
+                    onClick={() => setBoardView(key)}
+                  >
+                    {label}
+                  </button>
+                ))}
               </div>
-            ))}
+              {boardView === "people" && (
+                <label className="planning-project-filter">
+                  <span>Filtrar pessoas pelo(s) projeto(s)</span>
+                  <select value={projectFilter} onChange={(event) => setSelectedProject(event.target.value)}>
+                    <option value="all">Todos os projetos</option>
+                    {projects.map((project) => (
+                      <option key={project.id} value={project.id}>{project.name}</option>
+                    ))}
+                  </select>
+                </label>
+              )}
+            </div>
           </div>
+          {boardView === "people" && (
+            <div className="legend">
+              <span><i className="legend-dot good" /> Espaço livre</span>
+              <span><i className="legend-dot danger" /> Acima do limite</span>
+            </div>
+          )}
         </div>
+
+        {boardView === "people" ? (
+          <PeopleByWeek
+            items={items}
+            projectFilter={projectFilter}
+            draggedTask={draggedTask}
+            onOpenTask={onOpenTask}
+            onDragStart={onDragStart}
+            onDragEnd={onDragEnd}
+            onDrop={onDrop}
+          />
+        ) : (
+          <ProjectsByWeek items={items} />
+        )}
       </div>
     </>
   );
