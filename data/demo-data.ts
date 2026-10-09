@@ -31,7 +31,7 @@ export const absences: Record<string, Record<number, number>> = {
   ana: { 0: 8 }, elisa: { 1: 6 }, bruno: { 2: 8 },
 };
 
-export const people: Person[] = [
+export const internalPeople: Person[] = [
   { id: "ana", name: "Ana Costa", role: "Desenvolvedora frontend", squad: "Produto", weeklyHours: 40, skills: ["frontend", "design"], color: "#815dec" },
   { id: "bruno", name: "Bruno Lima", role: "Desenvolvedor frontend", squad: "Produto", weeklyHours: 40, skills: ["frontend"], color: "#e9a447" },
   { id: "carla", name: "Carla Mendes", role: "Desenvolvedora backend", squad: "Integrações", weeklyHours: 40, skills: ["backend"], color: "#e17390" },
@@ -41,11 +41,15 @@ export const people: Person[] = [
   { id: "gustavo", name: "Gustavo Silva", role: "Desenvolvedor full stack", squad: "Integrações", weeklyHours: 40, skills: ["frontend", "backend", "qa"], color: "#7c9cdb" },
 ];
 
-export const projects: Project[] = [
+export let people: Person[] = internalPeople;
+
+export const supplementalProjects: Project[] = [
   { id: "agendamento", name: "Portal de Agendamento", product: "Suite Portuária", description: "Planejamento e reserva de janelas operacionais", color: "#8161d7" },
   { id: "terminais", name: "Integração de Terminais", product: "Suite Portuária", description: "Eventos e disponibilidade entre sistemas", color: "#239c97" },
   { id: "operacoes", name: "Visão Operacional", product: "Inteligência Operacional", description: "Indicadores e acompanhamento de operações", color: "#e3a14f" },
 ];
+
+export let projects: Project[] = [];
 
 type ItemTuple = [
   number, string, string, string, number, number, number, Skill,
@@ -76,7 +80,7 @@ const rows: ItemTuple[] = [
   [122,"operacoes","Serviço de priorização","gustavo",2,3,18,"backend","Task","Painel de indicadores","Relatórios"],
 ];
 
-export const workItems: WorkItem[] = rows.map(([
+export const supplementalWorkItems: WorkItem[] = rows.map(([
   externalId, projectId, title, personId, week, dueWeek, hours, skill,
   type, feature, pbi, priority = "Média", status = "Pendente",
 ]) => ({
@@ -84,3 +88,15 @@ export const workItems: WorkItem[] = rows.map(([
   dueWeek, hours, skill, type, feature, pbi, priority, status,
   description: `${type === "Bug" ? "Corrigir" : type === "Test" ? "Validar" : "Implementar"} ${title.toLowerCase()} no contexto de ${pbi.toLowerCase()}. Item fictício estruturado como work item do Azure DevOps.`,
 }));
+
+export let workItems: WorkItem[] = [];
+
+export function replaceAzureSource(source: {
+  workItems: WorkItem[];
+  projects: Project[];
+  people: Person[];
+}) {
+  workItems = source.workItems;
+  projects = source.projects;
+  people = source.people;
+}
