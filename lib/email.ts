@@ -5,12 +5,12 @@ export interface TransactionalEmail {
   html: string;
 }
 
-export interface EmailProviderConfig {
+interface EmailProviderConfig {
   apiKey?: string;
   from?: string;
 }
 
-export type EmailSendResult =
+type EmailSendResult =
   | { status: "sent"; id?: string }
   | { status: "not-configured" }
   | { status: "provider-error" };

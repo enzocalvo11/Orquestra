@@ -4,14 +4,9 @@ export type DashboardView = "overview" | "timelines" | "planning";
 
 export interface SourceInfo {
   syncedAt: string;
-  projectCount: number;
-  workItemCount: number;
-  mode: string;
-  source: string;
   workItems: WorkItem[];
   projects: Project[];
   people: Person[];
-  sourceError?: string;
 }
 
 export interface CapacitySelection {

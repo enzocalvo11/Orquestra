@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 
 // Distance from the top/bottom of the window where scrolling starts while dragging.
-export const EDGE_ZONE_PX = 160;
+const EDGE_ZONE_PX = 160;
 // Scroll speed (pixels per frame) when the pointer is at the very edge.
 const MAX_STEP_PX = 24;
 

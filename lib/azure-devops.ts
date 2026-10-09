@@ -7,12 +7,17 @@ import {
   type Person,
   type Project,
   type WorkItem,
-} from "../data/demo-data";
+} from "../data/demo-data.ts";
 
-export interface AzureDevOpsConfig {
+interface AzureDevOpsConfig {
   organization: string;
   project: string;
   pat: string;
+}
+
+export interface AzurePlanningUpdate {
+  personId?: string;
+  dueDate?: string;
 }
 
 export interface AzureWorkItemSnapshot {
@@ -45,6 +50,10 @@ export class AzureDevOpsError extends Error {
 
 export function updateResponsibleTag(currentTags: string, personId: string): string {
   return replaceTagType(currentTags, "responsavel", `responsavel:${personId}`);
+}
+
+export function updateDueDateTag(currentTags: string, dueDate: string): string {
+  return replaceTagType(currentTags, "prazo", `prazo:${dueDate}`);
 }
 
 function tagType(tag: string): "responsavel" | "prazo" | "demo" | undefined {
@@ -82,7 +91,7 @@ function getHeaders(config: AzureDevOpsConfig): HeadersInit {
   };
 }
 
-export async function getWorkItem(
+async function getWorkItem(
   config: AzureDevOpsConfig,
   workItemId: number,
   fetcher: typeof fetch = fetch,
@@ -105,14 +114,20 @@ export async function getWorkItem(
   };
 }
 
-export async function assignWorkItem(
+export async function updateWorkItemPlanning(
   config: AzureDevOpsConfig,
   workItemId: number,
-  personId: string,
+  update: AzurePlanningUpdate,
   fetcher: typeof fetch = fetch,
 ): Promise<AzureWorkItemSnapshot> {
+  if (update.personId === undefined && update.dueDate === undefined) {
+    throw new Error("At least one planning field must be updated.");
+  }
+
   const currentWorkItem = await getWorkItem(config, workItemId, fetcher);
-  const tags = updateResponsibleTag(currentWorkItem.tags.join("; "), personId);
+  let tags = currentWorkItem.tags.join("; ");
+  if (update.personId !== undefined) tags = updateResponsibleTag(tags, update.personId);
+  if (update.dueDate !== undefined) tags = updateDueDateTag(tags, update.dueDate);
   const tagsOperation = currentWorkItem.tags.length > 0 ? "replace" : "add";
   const response = await fetcher(getWorkItemUrl(config, workItemId), {
     method: "PATCH",
@@ -125,10 +140,18 @@ export async function assignWorkItem(
   if (!response.ok) throw new AzureDevOpsError(response.status);
 
   const updatedWorkItem = await getWorkItem(config, workItemId, fetcher);
-  const expectedTag = `responsavel:${personId}`.toLowerCase();
-  const responsibleTags = updatedWorkItem.tags.filter(tag => tagType(tag) === "responsavel");
-  if (responsibleTags.length !== 1 || responsibleTags[0].toLowerCase() !== expectedTag) {
-    throw new AzureDevOpsError(502);
+  const expectedTags: Array<{ type: "responsavel" | "prazo"; value: string }> = [];
+  if (update.personId !== undefined) {
+    expectedTags.push({ type: "responsavel", value: `responsavel:${update.personId}` });
+  }
+  if (update.dueDate !== undefined) {
+    expectedTags.push({ type: "prazo", value: `prazo:${update.dueDate}` });
+  }
+  for (const expected of expectedTags) {
+    const matchingTags = updatedWorkItem.tags.filter(tag => tagType(tag) === expected.type);
+    if (matchingTags.length !== 1 || matchingTags[0].toLowerCase() !== expected.value.toLowerCase()) {
+      throw new AzureDevOpsError(502);
+    }
   }
 
   return updatedWorkItem;

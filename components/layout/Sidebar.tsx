@@ -22,14 +22,34 @@ const navigation = [
 interface SidebarProps {
   view: DashboardView;
   highAlertCount: number;
+  sourceSyncedAt: string | null;
+  sourceError: string;
+  syncing: boolean;
   onViewChange: (view: DashboardView) => void;
+}
+
+function sourceStatusLabel(sourceSyncedAt: string | null, sourceError: string, syncing: boolean): string {
+  if (syncing) return "Sincronizando...";
+  if (sourceError) return "Falha na sincronização";
+  if (!sourceSyncedAt) return "Aguardando sincronização";
+
+  const time = new Date(sourceSyncedAt).toLocaleTimeString("pt-BR", {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+  return `Atualizado ${time}`;
 }
 
 export function Sidebar({
   view,
   highAlertCount,
+  sourceSyncedAt,
+  sourceError,
+  syncing,
   onViewChange,
 }: SidebarProps) {
+  const sourceStatus = sourceStatusLabel(sourceSyncedAt, sourceError, syncing);
+
   return (
     <aside className="sidebar">
       <div className="brand">
@@ -68,9 +88,14 @@ export function Sidebar({
 
       <div className="sidebar-spacer" />
       <div className="sidebar-foot">
-        <span className="online-dot" />
-        Fonte Azure DevOps
-        <span title="Equipe e capacidade complementares mantidas no projeto"><Info size={14} /></span>
+        <span className={`online-dot${syncing ? " source-syncing" : sourceError ? " source-error" : ""}`} />
+        <span className="sidebar-source-copy">
+          <strong>Fonte Azure DevOps</strong>
+          <small role="status">{sourceStatus}</small>
+        </span>
+        <span className="sidebar-source-info" title={sourceError || "Equipe e capacidade complementares mantidas no projeto"}>
+          <Info size={14} />
+        </span>
       </div>
       <div className="sidebar-profile">
         <UserProfileIcon variant="dark" />

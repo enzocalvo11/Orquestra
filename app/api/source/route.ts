@@ -19,13 +19,7 @@ export async function GET() {
       project: AZURE_DEVOPS_PROJECT,
       pat: AZURE_DEVOPS_PAT,
     });
-    return Response.json({
-      mode: "azure-devops",
-      source: "Azure DevOps",
-      projectCount: source.projects.length,
-      workItemCount: source.workItems.length,
-      ...source,
-    });
+    return Response.json(source);
   } catch (error) {
     if (error instanceof AzureDevOpsError) {
       const status = error.status === 404 ? 404 : 502;

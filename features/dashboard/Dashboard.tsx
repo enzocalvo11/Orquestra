@@ -6,6 +6,7 @@ import { Sidebar } from "../../components/layout/Sidebar";
 import { Topbar } from "../../components/layout/Topbar";
 import {
   replaceAzureSource,
+  weeks,
   type PlanChange,
   type PlanningNotificationResult,
   type PlanningTransition,
@@ -20,7 +21,7 @@ import {
   getAlerts,
   getPerson,
   getSuggestions,
-  overviewPeriod,
+  overviewWeek,
   plannedItems,
   skillMismatchMessage,
   type Suggestion,
@@ -37,21 +38,23 @@ interface PlanApiResponse {
   notification?: PlanningNotificationResult;
 }
 
-interface AzureAssignmentResponse {
+interface AzurePlanningResponse {
   error?: string;
   workItem?: AzureWorkItemSnapshot;
 }
 
-function getPlanChangeCount(saved: PlanChange[], draft: PlanChange[]): number {
+function getPlanChangeCount(saved: PlanChange[], draft: PlanChange[], deadlineTaskIds: string[]): number {
   const savedByTask = new Map(saved.map((change) => [change.taskId, change]));
   const draftByTask = new Map(draft.map((change) => [change.taskId, change]));
   const taskIds = new Set([...savedByTask.keys(), ...draftByTask.keys()]);
 
-  return [...taskIds].filter((taskId) => {
+  const changedTaskIds = new Set([...taskIds].filter((taskId) => {
     const savedChange = savedByTask.get(taskId);
     const draftChange = draftByTask.get(taskId);
     return savedChange?.personId !== draftChange?.personId || savedChange?.weekIndex !== draftChange?.weekIndex;
-  }).length;
+  }));
+  deadlineTaskIds.forEach(taskId => changedTaskIds.add(taskId));
+  return changedTaskIds.size;
 }
 
 function planChangesMatch(left: PlanChange[], right: PlanChange[]): boolean {
@@ -118,7 +121,7 @@ export default function Dashboard({ initialChanges }: DashboardProps) {
   const [draftChanges, setDraftChanges] = useState<PlanChange[]>(initialChanges);
   const [showSavedIndicator, setShowSavedIndicator] = useState(false);
   const [selectedProject, setSelectedProject] = useState("all");
-  const [selectedCell, setSelectedCell] = useState<CapacitySelection>(() => ({ personId: "ana", week: overviewPeriod().week }));
+  const [selectedCell, setSelectedCell] = useState<CapacitySelection>(() => ({ personId: "ana", week: overviewWeek() }));
   const [taskId, setTaskId] = useState<string | null>(null);
   const [highlightedTaskId, setHighlightedTaskId] = useState<string | null>(null);
   const [highlightedCell, setHighlightedCell] = useState<CapacitySelection | null>(null);
@@ -126,6 +129,8 @@ export default function Dashboard({ initialChanges }: DashboardProps) {
   const [activeSuggestion, setActiveSuggestion] = useState<Suggestion | null>(null);
   const [draftPerson, setDraftPerson] = useState("ana");
   const [draftWeek, setDraftWeek] = useState(0);
+  const [draftDueWeek, setDraftDueWeek] = useState(0);
+  const [draftDeadlineChanges, setDraftDeadlineChanges] = useState<Record<string, number>>({});
   const [dragTaskId, setDragTaskId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [syncing, setSyncing] = useState(false);
@@ -134,16 +139,19 @@ export default function Dashboard({ initialChanges }: DashboardProps) {
   const [notice, setNotice] = useState("");
 
   const activeChanges = view === "planning" ? draftChanges : changes;
-  const items = useMemo(() => plannedItems(
-    activeChanges,
-    sourceInfo?.workItems ?? [],
-    changes,
-  ), [activeChanges, changes, sourceInfo]);
+  const items = useMemo(() => {
+    const planned = plannedItems(activeChanges, sourceInfo?.workItems ?? [], changes);
+    if (view !== "planning") return planned;
+    return planned.map(item => ({
+      ...item,
+      dueWeek: draftDeadlineChanges[item.id] ?? item.dueWeek,
+    }));
+  }, [activeChanges, changes, draftDeadlineChanges, sourceInfo, view]);
   const loads = useMemo(() => allLoads(items), [items]);
   const alerts = useMemo(() => getAlerts(items), [items]);
   const suggestions = useMemo(() => getSuggestions(items), [items]);
   const activeTask = taskId ? items.find((task) => task.id === taskId) : undefined;
-  const pendingChangeCount = getPlanChangeCount(changes, draftChanges);
+  const pendingChangeCount = getPlanChangeCount(changes, draftChanges, Object.keys(draftDeadlineChanges));
   const hasPendingChanges = pendingChangeCount > 0;
   const highAlertCount = alerts.filter((alert) => alert.severity === "high").length;
 
@@ -169,6 +177,7 @@ export default function Dashboard({ initialChanges }: DashboardProps) {
     }
     setDraftPerson(task.plannedPersonId);
     setDraftWeek(task.plannedWeek);
+    setDraftDueWeek(draftDeadlineChanges[id] ?? task.dueWeek);
   }
 
   function viewTaskInPlanning(id: string) {
@@ -184,7 +193,7 @@ export default function Dashboard({ initialChanges }: DashboardProps) {
     setView("planning");
   }
 
-  function stageTaskMove(id: string, personId: string, weekIndex: number) {
+  function stageTaskMove(id: string, personId: string, weekIndex: number, dueWeek: number) {
     if (busy) return;
 
     const task = items.find((item) => item.id === id);
@@ -201,7 +210,7 @@ export default function Dashboard({ initialChanges }: DashboardProps) {
       return;
     }
 
-    if (task.plannedPersonId === personId && task.plannedWeek === weekIndex) {
+    if (task.plannedPersonId === personId && task.plannedWeek === weekIndex && task.dueWeek === dueWeek) {
       setTaskId(null);
       return;
     }
@@ -218,6 +227,12 @@ export default function Dashboard({ initialChanges }: DashboardProps) {
     }
 
     setDraftChanges(nextChanges);
+    setDraftDeadlineChanges(current => {
+      const next = { ...current };
+      if (originalTask.dueWeek === dueWeek) delete next[id];
+      else next[id] = dueWeek;
+      return next;
+    });
     setShowSavedIndicator(false);
     setSelectedCell({ personId, week: weekIndex });
     setNotice(`${task.title} adicionada às alterações pendentes.`);
@@ -227,6 +242,7 @@ export default function Dashboard({ initialChanges }: DashboardProps) {
   function cancelPlanChanges() {
     if (!hasPendingChanges || busy) return;
     setDraftChanges(changes);
+    setDraftDeadlineChanges({});
     setShowSavedIndicator(false);
     setTaskId(null);
     setNotice("Alterações canceladas. O planejamento voltou ao estado salvo.");
@@ -240,19 +256,33 @@ export default function Dashboard({ initialChanges }: DashboardProps) {
       const sourceItems = sourceInfo?.workItems ?? [];
       const notificationChanges = getPlanningTransitions(changes, draftChanges, sourceItems);
       const sourceByTask = new Map(sourceItems.map((item) => [item.id, item]));
-      const assignments = draftChanges.flatMap((change) => {
+      const azureUpdates = new Map<string, {
+        item: SourceInfo["workItems"][number];
+        personId?: string;
+        dueWeek?: number;
+      }>();
+      for (const change of draftChanges) {
         const item = sourceByTask.get(change.taskId);
-        const currentPersonId = item?.personId;
-        return item && currentPersonId !== change.personId
-          ? [{ item, personId: change.personId }]
-          : [];
-      });
+        if (item && item.personId !== change.personId) {
+          azureUpdates.set(item.id, { item, personId: change.personId });
+        }
+      }
+      for (const [taskId, dueWeek] of Object.entries(draftDeadlineChanges)) {
+        const item = sourceByTask.get(taskId);
+        if (!item || !weeks[dueWeek]) {
+          throw new Error("Uma alteração de prazo não corresponde a um Work Item carregado.");
+        }
+        if (item.dueWeek !== dueWeek) {
+          const current = azureUpdates.get(taskId);
+          azureUpdates.set(taskId, { ...current, item, dueWeek });
+        }
+      }
 
-      for (const { item, personId } of assignments) {
-        await updateAzureResponsible(item.externalId, personId);
+      for (const { item, personId, dueWeek } of azureUpdates.values()) {
+        await updateAzurePlanning(item.externalId, { personId, dueWeek });
       }
       let currentWorkItems = sourceItems;
-      if (assignments.length) {
+      if (azureUpdates.size) {
         const refreshedSource = await syncSource(true);
         if (!refreshedSource) {
           throw new Error("As tags foram atualizadas no Azure DevOps, mas não foi possível recarregar os Work Items. Atualize a lista antes de salvar o planejamento.");
@@ -275,33 +305,11 @@ export default function Dashboard({ initialChanges }: DashboardProps) {
 
       setChanges(data.changes);
       setDraftChanges(data.changes);
+      setDraftDeadlineChanges({});
       setShowSavedIndicator(true);
       setNotice(savedNotice("Todas as alterações foram salvas.", data.notification));
     } catch (error) {
       setNotice(error instanceof Error ? error.message : "Não foi possível salvar as alterações.");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function resetPlan() {
-    if (!changes.length || busy) return;
-
-    setBusy(true);
-    try {
-      const response = await fetch("/api/plan", { method: "DELETE" });
-      const data = await response.json() as PlanApiResponse;
-      if (!response.ok) throw new Error(data.error);
-
-      setChanges([]);
-      setDraftChanges([]);
-      setShowSavedIndicator(false);
-      setHighlightedTaskId(null);
-      setHighlightedCell(null);
-      setHighlightedCellKind(null);
-      setNotice(savedNotice("Planejamento original restaurado.", data.notification));
-    } catch {
-      setNotice("Não foi possível restaurar o planejamento.");
     } finally {
       setBusy(false);
     }
@@ -319,7 +327,7 @@ export default function Dashboard({ initialChanges }: DashboardProps) {
       replaceAzureSource(data);
       setSourceInfo(data);
       setSourceError("");
-      if (!silent) setNotice(`${data.workItemCount} Work Items atualizados do Azure DevOps.`);
+      if (!silent) setNotice(`${data.workItems.length} Work Items atualizados do Azure DevOps.`);
       return data;
     } catch (error) {
       const message = error instanceof Error ? error.message : "Falha ao consultar o Azure DevOps.";
@@ -331,21 +339,31 @@ export default function Dashboard({ initialChanges }: DashboardProps) {
     }
   }, []);
 
-  async function updateAzureResponsible(workItemId: number, personId: string): Promise<AzureWorkItemSnapshot> {
-    const response = await fetch("/api/azure-devops/assign", {
+  async function updateAzurePlanning(
+    workItemId: number,
+    update: { personId?: string; dueWeek?: number },
+  ): Promise<void> {
+    const dueDate = update.dueWeek === undefined ? undefined : weeks[update.dueWeek]?.end;
+    if (update.dueWeek !== undefined && !dueDate) {
+      throw new Error("O prazo selecionado não pertence ao período disponível.");
+    }
+    const response = await fetch("/api/azure-devops/planning", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ workItemId, personId }),
+      body: JSON.stringify({ workItemId, ...update }),
     });
-    const data = await response.json() as AzureAssignmentResponse;
+    const data = await response.json() as AzurePlanningResponse;
     if (!response.ok || !data.workItem) {
       throw new Error(data.error ?? "Não foi possível confirmar as tags no Azure DevOps.");
     }
-    const expectedTag = `responsavel:${personId}`.toLowerCase();
-    if (!data.workItem.tags.some((tag) => tag.toLowerCase() === expectedTag)) {
-      throw new Error("O Azure DevOps não confirmou a tag do responsável após a atualização.");
+    const expectedTags = [
+      update.personId === undefined ? undefined : `responsavel:${update.personId}`,
+      dueDate === undefined ? undefined : `prazo:${dueDate}`,
+    ].filter((tag): tag is string => tag !== undefined);
+    if (expectedTags.some(expected =>
+      !data.workItem!.tags.some(tag => tag.toLowerCase() === expected.toLowerCase()))) {
+      throw new Error("O Azure DevOps não confirmou as tags do planejamento após a atualização.");
     }
-    return data.workItem;
   }
 
   useEffect(() => {
@@ -368,7 +386,8 @@ export default function Dashboard({ initialChanges }: DashboardProps) {
     const id = event.dataTransfer.getData("text/plain") || dragTaskId;
     // The dragged card may unmount after the move, so its dragend never fires.
     setDragTaskId(null);
-    if (id) stageTaskMove(id, personId, weekIndex);
+    const task = id ? items.find(item => item.id === id) : undefined;
+    if (task) stageTaskMove(task.id, personId, weekIndex, task.dueWeek);
   }
 
   function changeView(nextView: DashboardView) {
@@ -418,6 +437,7 @@ export default function Dashboard({ initialChanges }: DashboardProps) {
     setTaskId(task.id);
     setDraftPerson(suggestion.toPersonId);
     setDraftWeek(suggestion.toWeek);
+    setDraftDueWeek(draftDeadlineChanges[task.id] ?? task.dueWeek);
   }
 
   return (
@@ -425,6 +445,9 @@ export default function Dashboard({ initialChanges }: DashboardProps) {
       <Sidebar
         view={view}
         highAlertCount={highAlertCount}
+        sourceSyncedAt={sourceInfo?.syncedAt ?? null}
+        sourceError={sourceError}
+        syncing={syncing}
         onViewChange={changeView}
       />
 
@@ -438,14 +461,10 @@ export default function Dashboard({ initialChanges }: DashboardProps) {
               alerts={alerts}
               suggestions={suggestions}
               selectedCell={selectedCell}
-              sourceInfo={sourceInfo}
-              sourceError={sourceError}
-              syncing={syncing}
               onSelectCell={setSelectedCell}
               onOpenTask={openTask}
               onReviewSuggestion={reviewSuggestion}
               onAlertSelect={handleAlertSelect}
-              onRefresh={() => void syncSource()}
               onNavigatePlanning={() => setView("planning")}
             />
           )}
@@ -464,13 +483,11 @@ export default function Dashboard({ initialChanges }: DashboardProps) {
               highlightedCell={highlightedCell}
               highlightedCellKind={highlightedCellKind}
               alerts={alerts}
-              changeCount={changes.length}
               pendingChangeCount={pendingChangeCount}
               hasPendingChanges={hasPendingChanges}
               showSavedIndicator={showSavedIndicator}
               busy={busy}
               dragTaskId={dragTaskId}
-              onReset={() => void resetPlan()}
               onCancelChanges={cancelPlanChanges}
               onSaveChanges={() => void savePlanChanges()}
               onOpenTask={openTask}
@@ -490,12 +507,14 @@ export default function Dashboard({ initialChanges }: DashboardProps) {
           suggestion={activeSuggestion?.taskId === activeTask.id ? activeSuggestion : undefined}
           draftPerson={draftPerson}
           draftWeek={draftWeek}
+          draftDueWeek={draftDueWeek}
           busy={busy}
           deferSave={view === "planning"}
           onDraftPersonChange={setDraftPerson}
           onDraftWeekChange={setDraftWeek}
+          onDraftDueWeekChange={setDraftDueWeek}
           onClose={() => { setTaskId(null); setActiveSuggestion(null); }}
-          onSave={() => stageTaskMove(activeTask.id, draftPerson, draftWeek)}
+          onSave={() => stageTaskMove(activeTask.id, draftPerson, draftWeek, draftDueWeek)}
           onViewInPlanning={viewTaskInPlanning}
         />
       )}

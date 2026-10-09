@@ -16,11 +16,12 @@ interface TaskDialogProps {
   suggestion?: Suggestion;
   draftPerson: string;
   draftWeek: number;
+  draftDueWeek: number;
   busy: boolean;
   deferSave: boolean;
-  allowAnyPerson?: boolean;
   onDraftPersonChange: (personId: string) => void;
   onDraftWeekChange: (week: number) => void;
+  onDraftDueWeekChange: (week: number) => void;
   onClose: () => void;
   onSave: () => void;
   onViewInPlanning: (taskId: string) => void;
@@ -32,16 +33,18 @@ export function TaskDialog({
   suggestion,
   draftPerson,
   draftWeek,
+  draftDueWeek,
   busy,
   deferSave,
-  allowAnyPerson = false,
   onDraftPersonChange,
   onDraftWeekChange,
+  onDraftDueWeekChange,
   onClose,
   onSave,
   onViewInPlanning,
 }: TaskDialogProps) {
-  const changed = draftPerson !== task.plannedPersonId || draftWeek !== task.plannedWeek;
+  const allocationChanged = draftPerson !== task.plannedPersonId || draftWeek !== task.plannedWeek;
+  const changed = allocationChanged || draftDueWeek !== task.dueWeek;
   const source = loadFor(items, task.plannedPersonId, task.plannedWeek);
   const target = loadFor(items, draftPerson, draftWeek);
   const hours = task.status === "Concluído" ? 0 : task.hours;
@@ -81,7 +84,7 @@ export function TaskDialog({
         </div>
         <div className="modal-facts">
           <span><small>ESTIMATIVA</small><strong><Clock3 size={16} /> {task.hours} horas</strong></span>
-          <span><small>PRAZO</small><strong><CalendarDays size={16} /> {weeks[task.dueWeek].label}</strong></span>
+          <span><small>PRAZO</small><strong><CalendarDays size={16} /> {weeks[draftDueWeek].label}</strong></span>
           <span><small>PRIORIDADE</small><strong>{task.priority}</strong></span>
           <span><small>STATUS</small><strong>{task.status}</strong></span>
         </div>
@@ -94,62 +97,69 @@ export function TaskDialog({
         )}
         {deferSave ? (
           <>
-        <div className="modal-divider" />
-        <h3>Propor realocação</h3>
-        <p className="modal-helper">
-          {deferSave
-            ? "A mudança ficará pendente até você salvar o planejamento."
-            : "A mudança será salva no planejamento."}
-        </p>
-        <div className="modal-fields">
-          <label>
-            Responsável
-            <select value={draftPerson} onChange={(event) => onDraftPersonChange(event.target.value)}>
-              {task.plannedPersonId === UNASSIGNED_PERSON_ID && (
-                <option value={UNASSIGNED_PERSON_ID}>Sem responsável · ainda não atribuído</option>
-              )}
-              {people
-                .filter((person) => allowAnyPerson || person.skills.includes(task.skill))
-                .map((person) => (
-                  <option key={person.id} value={person.id}>{person.name} · {person.role}</option>
-                ))}
-            </select>
-          </label>
-          <label>
-            Semana planejada
-            <select value={draftWeek} onChange={(event) => onDraftWeekChange(Number(event.target.value))}>
-              {weeks.map((week, index) => <option key={index} value={index}>{week.label}</option>)}
-            </select>
-          </label>
-        </div>
-        {changed && (
-          <div className="modal-impact">
-            <strong>Impacto previsto</strong>
-            <p>{getPerson(task.plannedPersonId)?.name ?? "Sem responsável"} · {weeks[task.plannedWeek].label}: {formatHours(source.planned)}h → {formatHours(source.planned - hours)}h de {formatHours(source.capacity)}h</p>
-            <p>{getPerson(draftPerson)?.name} · {weeks[draftWeek].label}: {formatHours(target.planned)}h → {formatHours(targetAfter)}h de {formatHours(target.capacity)}h</p>
-            {targetAfter > target.capacity && <span>Essa mudança deixará o destino acima da capacidade.</span>}
-          </div>
-        )}
-        {draftWeek > task.dueWeek && (
-          <p className="deadline-warning">
-            <AlertCircle size={16} /> A semana escolhida ultrapassa o prazo desta atividade.
-          </p>
-        )}
-        {draftPerson !== task.plannedPersonId && (
-          <p className="modal-helper">
-            {deferSave
-              ? "Ao salvar as alterações do planejamento, a tag de responsável deste Work Item no Azure DevOps também será atualizada."
-              : "Ao confirmar, a tag de responsável deste Work Item no Azure DevOps também será atualizada."}
-          </p>
-        )}
-        <div className="modal-actions">
-          <button className="secondary-button" onClick={onClose}>Cancelar</button>
-          <button className="primary-button" disabled={busy || !changed} onClick={onSave}>
-            <Check size={16} /> {busy
-              ? "Salvando realocação..."
-              : deferSave ? "Aplicar à prévia" : "Confirmar realocação"}
-          </button>
-        </div>
+            <div className="modal-divider" />
+            <h3>Propor realocação</h3>
+            <p className="modal-helper">
+              A mudança ficará pendente até você salvar o planejamento.
+            </p>
+            <div className="modal-fields">
+              <label>
+                Responsável
+                <select value={draftPerson} onChange={(event) => onDraftPersonChange(event.target.value)}>
+                  {task.plannedPersonId === UNASSIGNED_PERSON_ID && (
+                    <option value={UNASSIGNED_PERSON_ID}>Sem responsável · ainda não atribuído</option>
+                  )}
+                  {people
+                    .filter((person) => person.skills.includes(task.skill))
+                    .map((person) => (
+                      <option key={person.id} value={person.id}>{person.name} · {person.role}</option>
+                    ))}
+                </select>
+              </label>
+              <label>
+                Semana planejada
+                <select value={draftWeek} onChange={(event) => onDraftWeekChange(Number(event.target.value))}>
+                  {weeks.map((week, index) => <option key={index} value={index}>{week.label}</option>)}
+                </select>
+              </label>
+              <label>
+                Prazo
+                <select value={draftDueWeek} onChange={(event) => onDraftDueWeekChange(Number(event.target.value))}>
+                  {weeks.map((week, index) => <option key={week.label} value={index}>{week.label}</option>)}
+                </select>
+              </label>
+            </div>
+            {allocationChanged && (
+              <div className="modal-impact">
+                <strong>Impacto previsto</strong>
+                <p>{getPerson(task.plannedPersonId)?.name ?? "Sem responsável"} · {weeks[task.plannedWeek].label}: {formatHours(source.planned)}h → {formatHours(source.planned - hours)}h de {formatHours(source.capacity)}h</p>
+                <p>{getPerson(draftPerson)?.name} · {weeks[draftWeek].label}: {formatHours(target.planned)}h → {formatHours(targetAfter)}h de {formatHours(target.capacity)}h</p>
+                {targetAfter > target.capacity && <span>Essa mudança deixará o destino acima da capacidade.</span>}
+              </div>
+            )}
+            {draftWeek > draftDueWeek && (
+              <p className="deadline-warning">
+                <AlertCircle size={16} /> A semana escolhida ultrapassa o prazo desta atividade.
+              </p>
+            )}
+            {draftPerson !== task.plannedPersonId && (
+              <p className="modal-helper">
+                Ao salvar as alterações do planejamento, a tag de responsável deste Work Item no Azure DevOps também será atualizada.
+              </p>
+            )}
+            {draftDueWeek !== task.dueWeek && (
+              <p className="modal-helper">
+                Ao salvar as alterações do planejamento, a tag de prazo deste Work Item no Azure DevOps também será atualizada.
+              </p>
+            )}
+            <div className="modal-actions">
+              <button className="secondary-button" onClick={onClose}>Cancelar</button>
+              <button className="primary-button" disabled={busy || !changed} onClick={onSave}>
+                <Check size={16} /> {busy
+                  ? "Salvando realocação..."
+                  : "Aplicar à prévia"}
+              </button>
+            </div>
           </>
         ) : (
           <div className="modal-actions">

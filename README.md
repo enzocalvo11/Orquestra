@@ -1,105 +1,164 @@
 # Orquestra
 
-Protótipo de apoio à gestão de projetos: reúne tarefas de diferentes projetos, estima a capacidade dos profissionais e sinaliza conflitos de prazo ou sobrecarga.
+**Planejamento de capacidade e realocação de atividades entre projetos.**
 
-## O que já funciona
+**Aplicação online:** [Acessar a Orquestra](https://orquestra-iport.importatlas-orquestra.workers.dev/)
 
-- Dados fictícios no formato de work items do Azure DevOps: projetos, tarefas, bugs, testes, responsáveis, habilidades, estimativas e prazos.
-- Visão de portfólio, timelines por projeto e capacidade semanal.
-- Alertas e sugestões de realocação calculadas a partir de habilidades, capacidade disponível e prazo.
-- Realocação por formulário ou arrastar e soltar; as alterações de planejamento ficam registradas em D1 e podem ser restauradas.
-- Notificação por e-mail para cada profissional cuja agenda foi alterada, com o resumo das tarefas após o salvamento.
-- No Planejamento, uma atividade só pode ser movida para quem tem a habilidade exigida. Durante o arraste, as células de quem não tem a habilidade ficam apagadas; ao soltar nelas, um aviso no canto explica o motivo. Cada pessoa mostra os projetos em que atua, e a cor do projeto aparece na borda dos cartões. A página rola sozinha quando o cartão é arrastado perto do topo ou do rodapé.
+Desenvolvida pelo time **Import Atlas** para o **Hackathon iPORT**, a Orquestra responde ao desafio:
 
-## Estado da integração
+> Como ajudar um gestor a tomar uma decisão de alocação antes de virar um problema?
 
-O Azure DevOps fornece os projetos e Work Items exibidos pela aplicacao. O cadastro interno de profissionais e os dados de capacidade continuam locais, assim como as propostas de planejamento salvas em D1. Nao inclua tokens ou credenciais no navegador.
+Quando um profissional atua em vários projetos, planejamentos separados dificultam enxergar sua carga total. A Orquestra reúne atividades do Azure DevOps, identifica sobrecargas e conflitos de prazo e permite avaliar uma realocação antes de confirmá-la.
 
-## Estrutura do código
+## A solução
+
+A aplicação conecta a visão dos projetos à disponibilidade das pessoas. O gestor consegue entender a causa de um conflito, analisar sugestões justificadas e comparar o impacto de um novo responsável ou período.
+
+| Tela | Principais recursos |
+| --- | --- |
+| **Visão geral** | Indicadores, mapa de ocupação semanal, atividades por profissional, alertas e sugestões de realocação. |
+| **Timelines** | Tarefas, bugs e testes organizados por projeto e semana, com responsável, estimativa e acesso aos detalhes. |
+| **Planejamento** | Quadros de pessoas e projetos por semana, realocação por formulário ou arrastar e soltar e prévia das alterações antes do salvamento. |
+
+O diferencial está em **avaliar a carga da pessoa considerando todos os projetos**. Mesmo ao filtrar um projeto, a capacidade continua refletindo o conjunto de atividades do profissional.
+
+## Da análise à decisão
+
+1. **Identificar:** consultar o mapa de ocupação e localizar sobrecargas, ausências ou atividades planejadas após o prazo.
+2. **Entender:** abrir o detalhe do profissional ou da atividade para ver quais tarefas compõem a carga.
+3. **Revisar:** analisar a sugestão e sua justificativa; visualizar o destino no planejamento sem aplicar a troca automaticamente.
+4. **Simular:** alterar responsável ou semana e conferir as horas previstas na origem e no destino. No Planejamento, as mudanças ficam pendentes até o gestor salvar ou cancelar.
+5. **Confirmar:** salvar o novo cenário e, com o serviço de e-mail configurado, notificar os profissionais afetados com o resumo da agenda atualizada.
+
+A aplicação bloqueia realocações para profissionais sem a habilidade exigida e avisa quando a mudança ultrapassa a capacidade ou o prazo. **A decisão final permanece com o gestor.**
+
+## Regras de planejamento
+
+Os cálculos ficam em [`lib/planning.ts`](lib/planning.ts), separados da interface:
 
 ```text
-app/                rotas, API e ponto de entrada da aplicação
-components/         peças reutilizáveis de interface
-features/           telas e coordenação do dashboard
-data/               conjunto fictício de projetos, pessoas e work items
-lib/planning.ts     regras puras de capacidade, alertas e sugestões
-db/                 conexão, schema e migrações da persistência D1
-docs/architecture.md fluxo dos dados e responsabilidades de cada pasta
+Capacidade disponível = horas semanais − horas de feriado − horas de ausência
+Carga planejada       = soma das horas das atividades não concluídas na semana
+Ocupação (%)          = carga planejada ÷ capacidade disponível × 100
 ```
 
-Veja [docs/architecture.md](docs/architecture.md) para entender o caminho dos dados e onde implementar mudanças.
+As sugestões buscam aliviar a sobrecarga com profissionais que tenham a habilidade necessária e horas disponíveis, dando preferência ao mesmo squad. Quando não há destino adequado para a atividade na mesma semana, consideram um período posterior para a própria pessoa, dentro do prazo.
 
-Para retomar o projeto em outra sessão do Codex, leia também [docs/CODEX_CONTEXT.md](docs/CODEX_CONTEXT.md). O arquivo reúne problema, fluxo principal, decisões, estado das telas, regras, limitações e próximas etapas.
+**O mecanismo atual usa regras determinísticas, sem IA.** As recomendações explicam a disponibilidade do destino e as horas liberadas na origem; ainda não consideram dependências entre atividades nem otimização global.
 
-## Desenvolvimento local
+## Tecnologias
 
-Use Node.js 22.13 ou superior. Na pasta que contem `package.json`, execute:
+| Camada | Tecnologias |
+| --- | --- |
+| Interface | React 19, TypeScript e Next.js |
+| Build e execução | Vinext, Vite e Cloudflare Workers |
+| Estilos e ícones | CSS, Tailwind CSS e Lucide React |
+| Persistência | Cloudflare D1 (SQLite) e Drizzle ORM |
+| Integração | Azure DevOps REST API |
+| E-mails | Resend |
+
+## Integração e dados atuais
+
+| Informação | Fonte e comportamento |
+| --- | --- |
+| **Atividades** | Tasks, Bugs e Tests do projeto Azure DevOps configurado, consultados ao abrir a aplicação, ao atualizar a fonte e após trocas de responsável. |
+| **Projetos exibidos** | Agrupamentos derivados de `System.AreaPath` dentro do projeto Azure configurado. |
+| **Equipe e calendário** | Sete profissionais fictícios, habilidades, squads, capacidade, ausências e quatro semanas de demonstração: **05/10/2026 a 01/11/2026**, incluindo o feriado de 12/10. |
+| **Planejamento e contatos** | Propostas atuais em `plan_changes` e destinatários de e-mail em `employee_contacts`, no D1. |
+
+- **Responsável:** a integração atualiza a tag `responsavel:<id-interno>` em `System.Tags`, como `responsavel:ana`, preservando outras tags. O campo nativo `System.AssignedTo` não é alterado.
+- **Período:** a mudança de semana fica no D1 e não modifica `System.IterationPath`. O botão **Restaurar plano inicial** remove as propostas locais; não reverte tags já atualizadas no Azure.
+- **Metadados:** campos e tags do Azure são complementados por dados locais quando necessário. Features e PBIs exibidos ainda não representam uma consulta dinâmica da hierarquia do Azure.
+
+A integração não possui sincronização contínua. Sem acesso ao Azure, a aplicação informa a falha e não substitui a lista por atividades fictícias. As gravações no Azure e no D1 são operações separadas; se houver falha parcial, atualize a fonte e revise o cenário antes de tentar novamente.
+
+Após o salvamento, o Resend envia um e-mail por profissional afetado. Uma falha no envio gera um aviso e mantém o plano salvo. Os contatos da demonstração devem ser substituídos antes de uso real.
+
+## Executar localmente
+
+**Pré-requisitos:** Node.js **22.13 ou superior**, npm e acesso a um projeto Azure DevOps com PAT autorizado a ler e atualizar Work Items. O projeto utiliza o binding D1 `DB`; o Resend é opcional.
+
+### 1. Clonar e instalar
 
 ```bash
+git clone https://github.com/enzocalvo11/Orquestra.git
+cd Orquestra
 npm ci
+```
+
+### 2. Configurar o ambiente
+
+Copie `.dev.vars.example` para `.dev.vars`:
+
+```bash
+cp .dev.vars.example .dev.vars
+```
+
+No PowerShell, use `Copy-Item .dev.vars.example .dev.vars`. Preencha o arquivo com as configurações do servidor:
+
+```env
+AZURE_DEVOPS_ORGANIZATION=ImportAtlas
+AZURE_DEVOPS_PROJECT=Orquestra2
+AZURE_DEVOPS_PAT=SEU_PAT
+RESEND_API_KEY=
+RESEND_FROM_EMAIL=
+```
+
+Para habilitar e-mails, preencha as duas variáveis do Resend e configure um remetente verificado e os contatos em `employee_contacts`. Sem essa configuração, o planejamento pode ser salvo e a interface informa que a notificação não foi enviada.
+
+O arquivo `.dev.vars` é ignorado pelo Git. Mantenha PAT e chaves apenas no servidor ou Worker, fora do código cliente.
+
+### 3. Preparar o banco e iniciar
+
+Na primeira instalação, gere o build e aplique as migrações na base local:
+
+```bash
 npm run build
 npx wrangler d1 execute DB --config dist/server/wrangler.json --local --file drizzle/0000_married_adam_warlock.sql --persist-to .wrangler/state
 npx wrangler d1 execute DB --config dist/server/wrangler.json --local --file drizzle/0001_dizzy_medusa.sql --persist-to .wrangler/state
 npm run dev
 ```
 
-Os comandos do D1 criam as tabelas locais na primeira instalacao. Nos proximos acessos, basta `npm run dev`. Abra a URL mostrada pelo terminal, normalmente `http://localhost:5173`. A base local fica em `.wrangler/state` e e separada da base hospedada. Para conferir alteracoes, execute `npm run lint`, `npx tsc --noEmit` e `npm run build`.
+Abra a URL indicada pelo terminal, normalmente `http://localhost:5173`. Nos próximos acessos, basta `npm run dev`. As migrações devem ser aplicadas uma única vez nesse banco; a base em `.wrangler/state` é independente da base hospedada.
 
-## Deploy direto no Cloudflare Workers
-
-O projeto mantém o adaptador do Sites, mas também possui uma configuração separada para publicar no Cloudflare Workers. O deploy direto usa o plano gratuito, o endereço `workers.dev` e um banco D1 remoto. A base local em `.wrangler/state` não é copiada para a nuvem.
-
-Antes do primeiro deploy, confirme que `.dev.vars` possui as cinco chaves preenchidas mostradas em `.dev.vars.example`. Esse arquivo é ignorado pelo Git e o comando de deploy envia seus valores diretamente como segredos do Worker; não copie os valores para arquivos versionados.
-
-Na primeira publicação:
+Para verificar alterações no projeto:
 
 ```bash
-npx wrangler login
-npm run db:migrate:cloudflare
-npm run deploy:cloudflare
+npm run lint
+npx tsc --noEmit
+npm run build
 ```
 
-O D1 deste projeto já está criado e vinculado pelo `database_id` público em `wrangler.cloudflare.jsonc`; não execute novamente `wrangler d1 create` na mesma conta. As migrations criam `plan_changes`, `employee_contacts` e os contatos fictícios no banco hospedado. O deploy executa um build específico para Cloudflare, envia as variáveis de `.dev.vars` como segredos e publica o Worker. O terminal apresenta a URL final `https://<nome>.<subdomínio>.workers.dev`.
+## Organização do projeto
 
-Nos deploys seguintes, desde que não haja uma migration nova, basta executar:
+| Local | Responsabilidade |
+| --- | --- |
+| [`app/`](app/) | Entrada da aplicação e rotas HTTP do backend. |
+| [`features/`](features/) | Telas, detalhe das atividades e coordenação do dashboard. |
+| [`components/`](components/) | Componentes compartilhados de interface. |
+| [`data/demo-data.ts`](data/demo-data.ts) | Equipe, calendário e metadados de demonstração. |
+| [`lib/planning.ts`](lib/planning.ts) | Capacidade, alertas e sugestões. |
+| [`lib/azure-devops.ts`](lib/azure-devops.ts) | Consulta e atualização de Work Items. |
+| [`lib/planning-notifications.ts`](lib/planning-notifications.ts) e [`lib/email.ts`](lib/email.ts) | Conteúdo, destinatários e envio dos e-mails. |
+| [`db/`](db/) e [`drizzle/`](drizzle/) | Conexão, schema e migrações do D1. |
 
-```bash
-npm run deploy:cloudflare
-```
+<details>
+<summary><strong>Endpoints da API</strong></summary>
 
-Se uma migration nova for criada, aplique `npm run db:migrate:cloudflare` antes do deploy. Consulte o passo a passo detalhado em `docs/cloudflare-deploy.md`.
+| Método e rota | Função |
+| --- | --- |
+| `GET /api/source` | Consultar e mapear os Work Items do Azure DevOps. |
+| `POST /api/azure-devops/assign` | Atualizar e verificar a tag de responsável. |
+| `GET /api/plan` | Consultar propostas salvas. |
+| `POST /api/plan` | Salvar uma realocação individual validada. |
+| `PUT /api/plan` | Salvar o conjunto de propostas do planejamento. |
+| `DELETE /api/plan` | Remover propostas locais e restaurar o período da fonte. |
 
-## Visão Geral
+</details>
 
-A Visão Geral usa a semana do cenário que coincide com a data atual em São Paulo. Fora do período de 5 de outubro a 1º de novembro de 2026, mostra a semana mais próxima como **período do cenário**. O mapa usa a carga e a capacidade calculadas em `lib/planning.ts`, incluindo ausências e feriado. Cada cor é proporcional ao percentual de ocupação; o número e as horas permanecem visíveis para não depender somente da cor.
+## Próximos passos
 
-Selecione uma pessoa para ver as atividades e a causa da ocupação. Quando existe uma sugestão, **Revisar sugestão** abre a atividade com o destino proposto e o impacto estimado. A mudança só é gravada no D1 após **Confirmar realocação**. Os alertas e o gráfico mostram apenas a semana exibida; o planejamento mantém as quatro semanas.
-
-## Atribuicao ficticia no Azure DevOps
-
-O endpoint `POST /api/azure-devops/assign` atualiza a tag `responsavel:<id>` de um Work Item real, usando os IDs internos existentes (`ana`, `bruno`, `carla`, `diego`, `elisa`, `fernanda` ou `gustavo`). Ao confirmar uma troca de responsavel, a interface usa o ID real associado ao Work Item carregado. A aplicacao preserva tags de outros tipos, remove a tag `responsavel:` anterior e evita duplicatas.
-
-Configure `AZURE_DEVOPS_ORGANIZATION=ImportAtlas`, `AZURE_DEVOPS_PROJECT=Orquestra2` e o segredo `AZURE_DEVOPS_PAT` no servidor ou Worker. Para desenvolvimento local, preencha `AZURE_DEVOPS_PAT` em `.dev.vars` (ignorado pelo Git); `.dev.vars.example` mostra o formato. O PAT precisa de permissao para ler e atualizar Work Items. Nunca exponha o PAT no navegador.
-
-## Notificações por e-mail
-
-Os e-mails dos profissionais ficam na tabela `employee_contacts` do D1. No cenário atual, todos usam `ac242883@alunos.unisanta.br`. Ao salvar uma mudança, a aplicação envia um resumo da agenda final para as pessoas afetadas. Uma realocação entre profissionais notifica origem e destino; várias mudanças salvas juntas geram apenas um e-mail por pessoa.
-
-O envio transacional usa a API do Resend. Configure somente no servidor ou Worker:
-
-```env
-RESEND_API_KEY=re_...
-RESEND_FROM_EMAIL=Orquestra <onboarding@resend.dev>
-```
-
-O domínio `onboarding@resend.dev` é indicado apenas para testes e possui limitações de destinatário. Para uso real, configure no Resend um domínio remetente verificado. Se o serviço não estiver configurado ou falhar, a alteração de planejamento continua salva e o gestor recebe um aviso na interface.
-
-### Atribuir responsavel pela interface
-
-Abra um Work Item carregado do Azure DevOps, escolha outro responsavel e confirme a realocacao. Na tela Planejamento, salve as alteracoes pendentes. A aplicacao usa o ID real associado a tarefa, atualiza `System.Tags`, consulta os Work Items novamente e atualiza a interface.
-
-## Fonte atual dos dados de planejamento
-
-Os Work Items e os projetos exibidos agora são consultados do Azure DevOps (`ImportAtlas/Orquestra2`) em `GET /api/source`. A consulta usa WIQL para tarefas, bugs e testes, busca seus campos e tags em lotes e recarrega a lista depois de uma atribuição. O código local mantém somente dados complementares que não existem no Azure (equipe, habilidades, capacidade, calendário e alguns metadados sem equivalente no Work Item). As propostas locais de semana e os contatos usados nas notificações continuam em D1; os dados de Work Items não são lidos de D1 nem do conjunto fictício.
-
-As tags `responsavel`, `prazo` e `demo` têm no máximo uma ocorrência de cada tipo após atualização. Ao atribuir responsável, a tag anterior `responsavel:` é substituída; os formatos existentes `prazo-...` e `demo-...` são reconhecidos e preservados sem duplicatas.
+- **Edição de Work Items:** ampliar a edição de campos das atividades diretamente pela aplicação.
+- **Calendário real:** substituir o período fixo por datas, feriados e ausências atualizáveis.
+- **Histórico de alterações:** registrar decisões e versões do planejamento para consulta e comparação.
+- **IA de apoio:** evoluir as recomendações e apoiar a análise do gestor, mantendo a revisão humana.

@@ -1,8 +1,6 @@
 import type { CSSProperties } from "react";
-import { holidayDays, people, projects, weeks } from "../../data/demo-data";
+import { holidayDays, people, projects, UNASSIGNED_PERSON_ID, weeks } from "../../data/demo-data";
 import { capacityFor, formatHours, loadFor, type PlannedItem } from "../../lib/planning";
-
-const UNASSIGNED = "sem-responsavel";
 
 const plural = (count: number, one: string, many: string) => `${count} ${count === 1 ? one : many}`;
 
@@ -19,7 +17,7 @@ function projectCell(items: PlannedItem[], projectId: string, week: number): Pro
     task.projectId === projectId && task.plannedWeek === week && task.status !== "Concluído",
   );
   const personIds = [...new Set(tasks.map((task) => task.plannedPersonId))]
-    .filter((personId) => personId !== UNASSIGNED);
+    .filter((personId) => personId !== UNASSIGNED_PERSON_ID);
   const overloadedCount = personIds.filter((personId) => {
     const load = loadFor(items, personId, week);
     return load.planned > load.capacity;
@@ -34,7 +32,7 @@ function projectCell(items: PlannedItem[], projectId: string, week: number): Pro
 }
 
 export function ProjectsByWeek({ items }: { items: PlannedItem[] }) {
-  const team = people.filter((person) => person.id !== UNASSIGNED);
+  const team = people.filter((person) => person.id !== UNASSIGNED_PERSON_ID);
   const rows = projects.map((project) => ({
     project,
     cells: weeks.map((_, week) => projectCell(items, project.id, week)),

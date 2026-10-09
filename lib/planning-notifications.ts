@@ -73,7 +73,7 @@ function transitionLabel(transition: PlanningTransition, personId: string): stri
   return transition.nextPersonId === personId ? "ATIVIDADE RECEBIDA" : "ATIVIDADE REALOCADA";
 }
 
-export function buildPlanningEmail(input: BuildPlanningEmailInput): TransactionalEmail {
+function buildPlanningEmail(input: BuildPlanningEmailInput): TransactionalEmail {
   const changesByTask = new Map(input.planChanges.map(change => [change.taskId, change]));
   const projectsById = new Map(input.projects.map(project => [project.id, project]));
   const tasksById = new Map(input.workItems.map(task => [task.id, task]));

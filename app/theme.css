@@ -8,8 +8,6 @@
 .secondary-button { font-size: 12px; }
 .page-heading p,
 .section-heading p { font-size: 12px; }
-.source-banner div span { font-size: 12px; }
-.source-status { font-size: 11px; }
 .metric-card > span:not(.metric-arrow) { font-size: 12px; }
 .metric-card small { font-size: 11px; }
 .sidebar-nav button { font-size: 13px; }
@@ -72,7 +70,6 @@
 .modal-suggestion span,
 .alert-card-empty,
 .alert-card-more,
-.overview-week-table th,
 .modal-impact span,
 .projects-cell-alert,
 .projects-cell-empty { font-size: 11px; }
@@ -83,7 +80,6 @@
 .timeline-empty,
 .timeline-task-meta .avatar,
 .overview-heat-name small,
-.overview-week-task > span,
 .modal-hierarchy small,
 .modal-facts small,
 .projects-grid-head small { font-size: 10px; }
@@ -91,7 +87,6 @@
 .insight-suggestion p,
 .insight-suggestion button,
 .timeline-task strong,
-.overview-week-task strong,
 .overview-no-suggestion p,
 .unassigned-queue-heading p,
 .unassigned-queue-heading > span,
@@ -107,7 +102,6 @@
 .planning-pending-indicator,
 .planning-saved-indicator,
 .toast,
-.overview-week-chip,
 .overview-heat-name,
 .overview-heatmap-footer button,
 .overview-no-suggestion button,
@@ -122,7 +116,6 @@
 .modal-impact p { font-size: 12px; }
 .planning-cell-head { font-size: 10px; }
 .timeline-task-type { font-size: 10px; }
-.overview-week-task > span { font-size: 10px; }
 .overview-week-selector button { font-size: 11px; }
 .timeline-task-meta .avatar { font-size: 8px; }
 .insight-numbers span,
@@ -222,15 +215,6 @@ html[data-theme="dark"] .metric-card strong { color: #f0f5fc; }
 html[data-theme="dark"] .metric-card small { color: #9fb1ca; }
 html[data-theme="dark"] .metric-arrow { color: #8098b7; }
 
-html[data-theme="dark"] .source-banner {
-  border-color: #294c70;
-  background: linear-gradient(115deg, #123452, #122843 74%);
-}
-html[data-theme="dark"] .source-banner strong { color: #c7e4f4; }
-html[data-theme="dark"] .source-banner div span { color: #a7c0d3; }
-html[data-theme="dark"] .source-status { color: #8bd6bc; }
-html[data-theme="dark"] .source-icon { background: #1e4a66; color: #91d9e5; }
-
 html[data-theme="dark"] .primary-button {
   border-color: #5795dc;
   background: linear-gradient(125deg, #367ac0, #2863a5);
@@ -257,8 +241,7 @@ html[data-theme="dark"] .alert-row strong { color: #edf2fa; }
 html[data-theme="dark"] .alert-row small,
 html[data-theme="dark"] .alert-card-more { color: #b0bfd2; }
 
-html[data-theme="dark"] .overview-heatmap .section-heading,
-html[data-theme="dark"] .overview-week-activities .section-heading { border-color: #29415f; }
+html[data-theme="dark"] .overview-heatmap .section-heading { border-color: #29415f; }
 html[data-theme="dark"] .overview-week-selector button {
   border-color: #344e6d;
   background: #142744;
@@ -267,7 +250,6 @@ html[data-theme="dark"] .overview-week-selector button {
 html[data-theme="dark"] .overview-week-selector button:hover { border-color: #6da6e2; color: #a9d0ff; }
 html[data-theme="dark"] .overview-week-selector button.selected { border-color: #6ca7e7; background: #24466f; color: #e2f0ff; }
 html[data-theme="dark"] .overview-week-alert { box-shadow: 0 0 0 2px #142744; }
-html[data-theme="dark"] .overview-week-chip,
 html[data-theme="dark"] .insight-period { background: #192f4e; color: #c0cfe2; }
 html[data-theme="dark"] .overview-detail .insight-numbers div { background: #172c49; }
 html[data-theme="dark"] .overview-detail .insight-numbers strong { color: #eff5fd; }
@@ -289,13 +271,6 @@ html[data-theme="dark"] .overview-heatmap-footer { border-color: #29415f; }
 html[data-theme="dark"] .overview-scale { color: #a9bad0; }
 html[data-theme="dark"] .overview-heatmap-footer button,
 html[data-theme="dark"] .overview-no-suggestion button { color: #83baff; }
-html[data-theme="dark"] .overview-week-table th { border-color: #2b415d; background: #142744; color: #d3deed; }
-html[data-theme="dark"] .overview-week-table td { border-color: #293f5b; }
-html[data-theme="dark"] .overview-week-task { border-color: #304762; background: #172c48; color: #e4edf8; }
-html[data-theme="dark"] .overview-week-task:hover { border-color: #5685b4; background: #1d395b; }
-html[data-theme="dark"] .overview-week-task > span { color: #b0c0d4; }
-html[data-theme="dark"] .overview-week-no-tasks { color: #8397b1; }
-
 html[data-theme="dark"] .filter-row button { border-color: #344c69; background: #142744; color: #c0cee0; }
 html[data-theme="dark"] .filter-row button:hover { border-color: #668fb8; color: #e1edfa; }
 html[data-theme="dark"] .filter-row button.selected { border-color: #6da8e8; background: #23466f; color: #e3f0ff; }

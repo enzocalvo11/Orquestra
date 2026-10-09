@@ -1,4 +1,3 @@
-import { eq } from "drizzle-orm";
 import { env } from "cloudflare:workers";
 import { getDb } from "../../../db";
 import { planChanges } from "../../../db/schema";
@@ -72,59 +71,6 @@ function parsePlanningTransitions(
   return transitions;
 }
 
-export async function GET() {
-  try {
-    const changes = await getDb().select().from(planChanges);
-    return Response.json({ changes });
-  } catch {
-    return Response.json({ error: "Não foi possível carregar o planejamento." }, { status: 500 });
-  }
-}
-
-export async function POST(request: Request) {
-  try {
-    const body = await request.json() as {
-      taskId?: string; personId?: string; weekIndex?: number; notificationChanges?: unknown;
-    };
-    const source = await getPlanningSource();
-    const task = source.workItems.find(item => item.id === body.taskId);
-    const person = source.people.find(item => item.id === body.personId);
-    if (!task || !person || !Number.isInteger(body.weekIndex) ||
-      (body.weekIndex as number) < 0 || (body.weekIndex as number) >= weeks.length) {
-      return Response.json({ error: "Tarefa, profissional ou período inválido." }, { status: 400 });
-    }
-    if (!person.skills.includes(task.skill)) {
-      return Response.json({ error: skillMismatchMessage(person.name, task.skill) }, { status: 400 });
-    }
-    const weekIndex = body.weekIndex as number;
-    const transitions = parsePlanningTransitions(body.notificationChanges, [{
-      taskId: task.id,
-      personId: person.id,
-      weekIndex,
-    }], source);
-    if (!transitions) {
-      return Response.json({ error: "As informações da notificação são inválidas." }, { status: 400 });
-    }
-    const db = getDb();
-    if (task.personId === person.id && task.week === weekIndex) {
-      await db.delete(planChanges).where(eq(planChanges.taskId, task.id));
-    } else {
-      await db.insert(planChanges).values({
-        taskId: task.id, personId: person.id, weekIndex,
-        updatedAt: new Date().toISOString(),
-      }).onConflictDoUpdate({
-        target: planChanges.taskId,
-        set: { personId: person.id, weekIndex, updatedAt: new Date().toISOString() },
-      });
-    }
-    const changes = await db.select().from(planChanges);
-    const notification = await notifyPlanningChanges({ source, planChanges: changes, transitions });
-    return Response.json({ changes, notification });
-  } catch {
-    return Response.json({ error: "Não foi possível salvar a realocação." }, { status: 500 });
-  }
-}
-
 export async function PUT(request: Request) {
   try {
     const body = await request.json() as { changes?: unknown; notificationChanges?: unknown };
@@ -188,29 +134,5 @@ export async function PUT(request: Request) {
     return Response.json({ changes, notification });
   } catch {
     return Response.json({ error: "Não foi possível salvar todas as alterações." }, { status: 500 });
-  }
-}
-
-export async function DELETE() {
-  try {
-    const source = await getPlanningSource();
-    const db = getDb();
-    const existingChanges = await db.select().from(planChanges);
-    const transitions = existingChanges.flatMap((change): PlanningTransition[] => {
-      const task = source.workItems.find(item => item.id === change.taskId);
-      if (!task || task.week === change.weekIndex) return [];
-      return [{
-        taskId: task.id,
-        previousPersonId: task.personId,
-        previousWeekIndex: change.weekIndex,
-        nextPersonId: task.personId,
-        nextWeekIndex: task.week,
-      }];
-    });
-    await db.delete(planChanges);
-    const notification = await notifyPlanningChanges({ source, planChanges: [], transitions });
-    return Response.json({ changes: [], notification });
-  } catch {
-    return Response.json({ error: "Não foi possível restaurar o plano inicial." }, { status: 500 });
   }
 }

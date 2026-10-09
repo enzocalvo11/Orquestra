@@ -2,17 +2,17 @@ import { useState } from "react";
 import type { CSSProperties } from "react";
 import {
   Activity, AlertCircle, ArrowRight, CalendarDays,
-  Cloud, Layers3, RefreshCw, UsersRound,
+  Layers3, UsersRound,
 } from "lucide-react";
 import { Avatar } from "../../components/common/Avatar";
 import { AlertCard } from "../../components/common/AlertCard";
 import { MetricCard } from "../../components/common/MetricCard";
 import { absences, people, projects, weeks } from "../../data/demo-data";
 import {
-  formatHours, getPerson, getProject, overviewPeriod,
+  formatHours, getPerson, getProject, overviewWeek,
   type Alert, type LoadCell, type PlannedItem, type Suggestion,
 } from "../../lib/planning";
-import type { CapacitySelection, SourceInfo } from "../dashboard/types";
+import type { CapacitySelection } from "../dashboard/types";
 
 interface OverviewPageProps {
   items: PlannedItem[];
@@ -20,19 +20,12 @@ interface OverviewPageProps {
   alerts: Alert[];
   suggestions: Suggestion[];
   selectedCell: CapacitySelection;
-  sourceInfo: SourceInfo | null;
-  sourceError: string;
-  syncing: boolean;
   onSelectCell: (selection: CapacitySelection) => void;
   onOpenTask: (taskId: string) => void;
   onReviewSuggestion: (suggestion: Suggestion) => void;
   onAlertSelect: (alert: Alert) => void;
-  onRefresh: () => void;
   onNavigatePlanning: () => void;
 }
-
-const timeLabel = (value: string) =>
-  new Date(value).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
 
 const heatStops = [
   { at: 0, color: [31, 152, 89] },
@@ -223,70 +216,12 @@ function CapacityDetail({
   );
 }
 
-function WeekActivities({
-  items, week, onOpenTask,
-}: {
-  items: PlannedItem[];
-  week: number;
-  onOpenTask: (taskId: string) => void;
-}) {
-  const assignments = people.map((person) => ({
-    person,
-    tasks: items
-      .filter((task) => task.plannedWeek === week && task.plannedPersonId === person.id && task.status !== "Concluído")
-      .sort((a, b) => a.title.localeCompare(b.title, "pt-BR")),
-  }));
-
-  return (
-    <section className="surface overview-week-activities" aria-labelledby="overview-week-activities-title">
-      <div className="section-heading">
-        <div>
-          <div className="section-kicker">SEMANA ATUAL</div>
-          <h2 id="overview-week-activities-title">Atividades propostas para esta semana</h2>
-        </div>
-        <span className="overview-week-chip"><CalendarDays size={15} /> {weeks[week].label}</span>
-      </div>
-      <div className="overview-week-table-scroll" role="region" aria-label="Tabela de atividades por profissional" tabIndex={0}>
-        <table className="overview-week-table">
-          <thead>
-            <tr>
-              {assignments.map(({ person }) => (
-                <th scope="col" key={person.id}>
-                  <Avatar personId={person.id} small />
-                  <span>{person.name}</span>
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              {assignments.map(({ person, tasks }) => (
-                <td key={person.id}>
-                  {tasks.length ? tasks.map((task) => {
-                    const project = getProject(task.projectId);
-                    return (
-                      <button className="overview-week-task" key={task.id} onClick={() => onOpenTask(task.id)}>
-                        <strong>{task.title}</strong>
-                        <span><i style={{ background: project?.color }} />{project?.name ?? "Projeto"}</span>
-                      </button>
-                    );
-                  }) : <span className="overview-week-no-tasks">—</span>}
-                </td>
-              ))}
-            </tr>
-          </tbody>
-        </table>
-      </div>
-    </section>
-  );
-}
-
 export function OverviewPage({
-  items, loads, alerts, suggestions, selectedCell, sourceInfo, sourceError, syncing,
-  onSelectCell, onOpenTask, onReviewSuggestion, onAlertSelect, onRefresh,
+  items, loads, alerts, suggestions, selectedCell,
+  onSelectCell, onOpenTask, onReviewSuggestion, onAlertSelect,
   onNavigatePlanning,
 }: OverviewPageProps) {
-  const { week: currentWeek } = overviewPeriod();
+  const currentWeek = overviewWeek();
   const [selectedWeek, setSelectedWeek] = useState(currentWeek);
   const weekLoads = loads.filter(cell => cell.week === selectedWeek);
   const alertWeeks = new Set(alerts.map((alert) => alert.week));
@@ -321,21 +256,6 @@ export function OverviewPage({
           <h1>Onde a equipe precisa de atenção?</h1>
           <p>Escolha uma semana para analisar a ocupação da equipe e revisar possíveis ajustes.</p>
         </div>
-        <button className="primary-button" onClick={onRefresh} disabled={syncing}>
-          <RefreshCw size={16} className={syncing ? "spinning" : ""} />
-          {syncing ? "Atualizando..." : "Atualizar dados"}
-        </button>
-      </div>
-
-      <div className="source-banner">
-        <span className="source-icon"><Cloud size={19} /></span>
-        <div>
-          <strong>{sourceInfo?.source ?? "Azure DevOps"}</strong>
-          <span>{sourceInfo
-            ? `${sourceInfo.workItemCount} Work Items atuais em ${sourceInfo.projectCount} projetos. Equipe e capacidade permanecem como dados internos.`
-            : sourceError || (syncing ? "Consultando Work Items no Azure DevOps..." : "Aguardando consulta ao Azure DevOps.")}</span>
-        </div>
-        <span className="source-status"><i /> {sourceInfo ? `Atualizado ${timeLabel(sourceInfo.syncedAt)}` : sourceError ? "Falha na consulta" : "Conectando"}</span>
       </div>
 
       <div className="section-kicker overview-metrics-title">
@@ -379,7 +299,6 @@ export function OverviewPage({
         />
       </div>
 
-      <WeekActivities items={items} week={currentWeek} onOpenTask={onOpenTask} />
     </>
   );
 }

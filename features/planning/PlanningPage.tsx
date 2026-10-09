@@ -1,5 +1,5 @@
 import { useState, type DragEvent } from "react";
-import { Check, ChevronDown, Info, RotateCcw, Save } from "lucide-react";
+import { Check, ChevronDown, Info, Save } from "lucide-react";
 import { AlertCard } from "../../components/common/AlertCard";
 import { projects } from "../../data/demo-data";
 import type { Alert, PlannedItem } from "../../lib/planning";
@@ -20,13 +20,11 @@ interface PlanningPageProps {
   highlightedCell: { personId: string; week: number } | null;
   highlightedCellKind: "alert" | "recommendation" | null;
   alerts: Alert[];
-  changeCount: number;
   pendingChangeCount: number;
   hasPendingChanges: boolean;
   showSavedIndicator: boolean;
   busy: boolean;
   dragTaskId: string | null;
-  onReset: () => void;
   onCancelChanges: () => void;
   onSaveChanges: () => void;
   onOpenTask: (taskId: string) => void;
@@ -42,13 +40,11 @@ export function PlanningPage({
   highlightedCell,
   highlightedCellKind,
   alerts,
-  changeCount,
   pendingChangeCount,
   hasPendingChanges,
   showSavedIndicator,
   busy,
   dragTaskId,
-  onReset,
   onCancelChanges,
   onSaveChanges,
   onOpenTask,
@@ -85,20 +81,9 @@ export function PlanningPage({
                 <Save size={16} /> {busy ? "Salvando..." : "Salvar Alterações"}
               </button>
             </>
-          ) : (
-            <>
-              {showSavedIndicator && (
-                <span className="planning-saved-indicator" role="status"><Check size={15} /> Alterações salvas</span>
-              )}
-              <button
-                className="secondary-button"
-                onClick={onReset}
-                disabled={changeCount === 0 || busy}
-              >
-                <RotateCcw size={16} /> Restaurar plano inicial
-              </button>
-            </>
-          )}
+          ) : showSavedIndicator ? (
+            <span className="planning-saved-indicator" role="status"><Check size={15} /> Alterações salvas</span>
+          ) : null}
         </div>
       </div>
 

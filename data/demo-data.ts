@@ -1,7 +1,7 @@
 export type Skill = "frontend" | "backend" | "qa" | "design";
-export type WorkType = "Task" | "Bug" | "Test";
+type WorkType = "Task" | "Bug" | "Test";
 export type WorkStatus = "Pendente" | "Em andamento" | "Concluído";
-export type Priority = "Alta" | "Média" | "Baixa";
+type Priority = "Alta" | "Média" | "Baixa";
 
 export interface Person {
   id: string; name: string; role: string; squad: string;
