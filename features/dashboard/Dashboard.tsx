@@ -4,20 +4,19 @@ import { useEffect, useMemo, useState, type DragEvent } from "react";
 import { NoticeToast } from "../../components/feedback/NoticeToast";
 import { Sidebar } from "../../components/layout/Sidebar";
 import { Topbar } from "../../components/layout/Topbar";
-import { people, workItems, type PlanChange } from "../../data/demo-data";
+import { workItems, type PlanChange } from "../../data/demo-data";
 import { OverviewPage } from "../overview/OverviewPage";
 import { PlanningPage } from "../planning/PlanningPage";
-import { TeamPage } from "../team/TeamPage";
 import { TaskDialog } from "../work-items/TaskDialog";
 import { TimelinesPage } from "../timelines/TimelinesPage";
 import {
   allLoads,
-  capacityFor,
   getAlerts,
   getPerson,
   getSuggestions,
   overviewPeriod,
   plannedItems,
+  skillMismatchMessage,
   type Suggestion,
 } from "../../lib/planning";
 import type { CapacitySelection, DashboardView, SourceInfo } from "./types";
@@ -76,7 +75,6 @@ export default function Dashboard({ initialChanges }: DashboardProps) {
   const activeTask = taskId ? items.find((task) => task.id === taskId) : undefined;
   const pendingChangeCount = getPlanChangeCount(changes, draftChanges);
   const hasPendingChanges = pendingChangeCount > 0;
-  const availableHours = people.reduce((sum, person) => sum + capacityFor(person, 0), 0);
   const highAlertCount = alerts.filter((alert) => alert.severity === "high").length;
 
   useEffect(() => {
@@ -103,7 +101,7 @@ export default function Dashboard({ initialChanges }: DashboardProps) {
 
     const person = getPerson(personId);
     if (!person?.skills.includes(task.skill)) {
-      setNotice(`${person?.name ?? "Este profissional"} não possui a habilidade necessária.`);
+      setNotice(skillMismatchMessage(person?.name ?? "Este profissional", task.skill));
       return;
     }
 
@@ -155,7 +153,7 @@ export default function Dashboard({ initialChanges }: DashboardProps) {
 
     const person = getPerson(personId);
     if (!person?.skills.includes(task.skill)) {
-      setNotice(`${person?.name ?? "Este profissional"} não possui a habilidade necessária.`);
+      setNotice(skillMismatchMessage(person?.name ?? "Este profissional", task.skill));
       return;
     }
 
@@ -259,17 +257,9 @@ export default function Dashboard({ initialChanges }: DashboardProps) {
   function dropTask(event: DragEvent<HTMLElement>, personId: string, weekIndex: number) {
     event.preventDefault();
     const id = event.dataTransfer.getData("text/plain") || dragTaskId;
+    // The dragged card may unmount after the move, so its dragend never fires.
+    setDragTaskId(null);
     if (id) stageTaskMove(id, personId, weekIndex);
-  }
-
-  function selectProject(projectId: string) {
-    if (view === "planning" && hasPendingChanges) {
-      setNotice("Salve ou cancele as alterações pendentes antes de sair do Planejamento.");
-      return;
-    }
-
-    setSelectedProject(projectId);
-    setView("timelines");
   }
 
   function changeView(nextView: DashboardView) {
@@ -300,7 +290,6 @@ export default function Dashboard({ initialChanges }: DashboardProps) {
         view={view}
         highAlertCount={highAlertCount}
         onViewChange={changeView}
-        onProjectSelect={selectProject}
       />
 
       <div className="content-shell">
@@ -349,7 +338,6 @@ export default function Dashboard({ initialChanges }: DashboardProps) {
               onDrop={dropTask}
             />
           )}
-          {view === "team" && <TeamPage items={items} availableHours={availableHours} />}
         </main>
       </div>
 

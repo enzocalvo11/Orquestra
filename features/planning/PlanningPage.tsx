@@ -1,9 +1,18 @@
-import type { DragEvent } from "react";
+import type { CSSProperties, DragEvent } from "react";
 import { Check, Info, RotateCcw, Save } from "lucide-react";
 import { Avatar } from "../../components/common/Avatar";
 import { WorkCard } from "../../components/common/WorkCard";
-import { holidayDays, people, weeks } from "../../data/demo-data";
+import { holidayDays, people, projects, weeks } from "../../data/demo-data";
 import { formatHours, loadFor, type PlannedItem } from "../../lib/planning";
+import { useDragAutoScroll } from "./useDragAutoScroll";
+
+// Projects where the person has at least one activity in the current scenario.
+function projectsOf(items: PlannedItem[], personId: string) {
+  const projectIds = new Set(
+    items.filter((task) => task.plannedPersonId === personId).map((task) => task.projectId),
+  );
+  return projects.filter((project) => projectIds.has(project.id));
+}
 
 interface PlanningPageProps {
   items: PlannedItem[];
@@ -39,6 +48,7 @@ export function PlanningPage({
   onDrop,
 }: PlanningPageProps) {
   const draggedTask = items.find((task) => task.id === dragTaskId);
+  useDragAutoScroll(dragTaskId !== null);
 
   return (
     <>
@@ -114,6 +124,14 @@ export function PlanningPage({
                   <Avatar personId={person.id} />
                   <strong>{person.name}</strong>
                   <small>{person.role}</small>
+                  <ul className="planning-person-projects" aria-label={`Projetos de ${person.name}`}>
+                    {projectsOf(items, person.id).map((project) => (
+                      <li key={project.id} style={{ "--project-color": project.color } as CSSProperties}>
+                        <i aria-hidden="true" />
+                        {project.name}
+                      </li>
+                    ))}
+                  </ul>
                 </div>
                 {weeks.map((_, week) => {
                   const cell = loadFor(items, person.id, week);
@@ -123,12 +141,9 @@ export function PlanningPage({
                     <div
                       key={week}
                       className={`planning-cell ${cell.planned > cell.capacity ? "overloaded" : ""} ${!canDrop ? "drop-disabled" : ""}`}
-                      onDragOver={(event) => {
-                        if (canDrop) event.preventDefault();
-                      }}
-                      onDrop={(event) => {
-                        if (canDrop) onDrop(event, person.id, week);
-                      }}
+                      // Blocked cells still accept the drop so the dashboard can explain why it was refused.
+                      onDragOver={(event) => event.preventDefault()}
+                      onDrop={(event) => onDrop(event, person.id, week)}
                     >
                       <div className="planning-cell-head">
                         <span>{cell.planned} / {formatHours(cell.capacity)}h</span>

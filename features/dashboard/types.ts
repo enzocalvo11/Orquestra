@@ -1,4 +1,4 @@
-export type DashboardView = "overview" | "timelines" | "planning" | "team";
+export type DashboardView = "overview" | "timelines" | "planning";
 
 export interface SourceInfo {
   syncedAt: string;

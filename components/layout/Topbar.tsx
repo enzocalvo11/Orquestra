@@ -6,7 +6,6 @@ const pageNames: Record<DashboardView, string> = {
   overview: "Visão geral",
   timelines: "Timelines",
   planning: "Planejamento",
-  team: "Equipe",
 };
 
 export function Topbar({ view, alertCount }: { view: DashboardView; alertCount: number }) {

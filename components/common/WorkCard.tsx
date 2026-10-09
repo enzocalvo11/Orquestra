@@ -42,7 +42,7 @@ export function WorkCard({
       >
         <span className="work-card-top">
           <span className="work-card-type">
-            {typeName[task.type]} · {task.id}
+            {typeName[task.type]}
           </span>
           {draggable && <GripVertical size={14} aria-hidden="true" />}
         </span>

@@ -1,7 +1,14 @@
 import {
   absences, holidayDays, people, projects, weeks, workItems,
-  type Person, type PlanChange, type WorkItem,
+  type Person, type PlanChange, type Skill, type WorkItem,
 } from "../data/demo-data";
+
+const skillLabels: Record<Skill, string> = {
+  frontend: "Frontend", backend: "Backend", qa: "QA", design: "Design",
+};
+
+export const skillMismatchMessage = (personName: string, skill: Skill) =>
+  `${personName} não tem a competência de ${skillLabels[skill]} para esta atividade.`;
 
 export interface PlannedItem extends WorkItem {
   plannedPersonId: string;

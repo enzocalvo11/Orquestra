@@ -2,6 +2,7 @@ import { eq } from "drizzle-orm";
 import { getDb } from "../../../db";
 import { planChanges } from "../../../db/schema";
 import { people, weeks, workItems, type PlanChange } from "../../../data/demo-data";
+import { skillMismatchMessage } from "../../../lib/planning";
 
 export const dynamic = "force-dynamic";
 
@@ -26,7 +27,7 @@ export async function POST(request: Request) {
       return Response.json({ error: "Tarefa, profissional ou período inválido." }, { status: 400 });
     }
     if (!person.skills.includes(task.skill)) {
-      return Response.json({ error: `${person.name} não possui a habilidade indicada para esta atividade.` }, { status: 400 });
+      return Response.json({ error: skillMismatchMessage(person.name, task.skill) }, { status: 400 });
     }
     const weekIndex = body.weekIndex as number;
     const db = getDb();
@@ -71,7 +72,7 @@ export async function PUT(request: Request) {
         return Response.json({ error: "Tarefa, profissional ou período inválido." }, { status: 400 });
       }
       if (!person.skills.includes(task.skill)) {
-        return Response.json({ error: `${person.name} não possui a habilidade indicada para esta atividade.` }, { status: 400 });
+        return Response.json({ error: skillMismatchMessage(person.name, task.skill) }, { status: 400 });
       }
 
       seenTaskIds.add(task.id);

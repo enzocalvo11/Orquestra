@@ -30,6 +30,31 @@
   color: #278365;
 }
 
+.planning-person-projects {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 5px;
+}
+
+.planning-person-projects li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 9px;
+  font-weight: 650;
+  color: #52627a;
+}
+
+.planning-person-projects i {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--project-color);
+}
+
 @media (max-width: 700px) {
   .planning-actions {
     justify-content: flex-start;

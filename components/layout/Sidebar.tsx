@@ -4,17 +4,14 @@ import {
   LayoutDashboard,
   Layers3,
   MoveRight,
-  UsersRound,
 } from "lucide-react";
 import { Avatar } from "../common/Avatar";
-import { projects } from "../../data/demo-data";
 import type { DashboardView } from "../../features/dashboard/types";
 
 const navigation = [
   { key: "overview", label: "Visão geral", icon: LayoutDashboard },
   { key: "timelines", label: "Timelines", icon: CalendarDays },
   { key: "planning", label: "Planejamento", icon: MoveRight },
-  { key: "team", label: "Equipe", icon: UsersRound },
 ] as const satisfies ReadonlyArray<{
   key: DashboardView;
   label: string;
@@ -25,14 +22,12 @@ interface SidebarProps {
   view: DashboardView;
   highAlertCount: number;
   onViewChange: (view: DashboardView) => void;
-  onProjectSelect: (projectId: string) => void;
 }
 
 export function Sidebar({
   view,
   highAlertCount,
   onViewChange,
-  onProjectSelect,
 }: SidebarProps) {
   return (
     <aside className="sidebar">
@@ -71,16 +66,6 @@ export function Sidebar({
           </button>
         ))}
       </nav>
-
-      <div className="sidebar-label sidebar-project-label">PROJETOS</div>
-      <div className="sidebar-projects">
-        {projects.map((project) => (
-          <button key={project.id} onClick={() => onProjectSelect(project.id)}>
-            <i style={{ background: project.color }} />
-            {project.name}
-          </button>
-        ))}
-      </div>
 
       <div className="sidebar-spacer" />
       <div className="sidebar-foot">
