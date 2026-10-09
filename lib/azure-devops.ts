@@ -14,6 +14,8 @@ export interface AzureDevOpsConfig {
   pat: string;
 }
 
+export type AzureTagType = "responsavel" | "prazo" | "demo";
+
 export interface AzureWorkItemSnapshot {
   id: number;
   title: string;
@@ -51,7 +53,7 @@ function tagType(tag: string): "responsavel" | "prazo" | "demo" | undefined {
   return match?.[1].toLowerCase() as "responsavel" | "prazo" | "demo" | undefined;
 }
 
-export function replaceTagType(currentTags: string, type: "responsavel" | "prazo" | "demo", nextTag: string): string {
+export function replaceTagType(currentTags: string, type: AzureTagType, nextTag: string): string {
   if (tagType(nextTag) !== type) throw new Error(`Tag must use the ${type} type.`);
 
   const keptTypes = new Set<string>();
@@ -104,14 +106,16 @@ export async function getWorkItem(
   };
 }
 
-export async function assignWorkItem(
+export async function updateWorkItemTag(
   config: AzureDevOpsConfig,
   workItemId: number,
-  personId: string,
+  type: AzureTagType,
+  value: string,
   fetcher: typeof fetch = fetch,
 ): Promise<AzureWorkItemSnapshot> {
   const currentWorkItem = await getWorkItem(config, workItemId, fetcher);
-  const tags = updateResponsibleTag(currentWorkItem.tags.join("; "), personId);
+  const nextTag = `${type}:${value}`;
+  const tags = replaceTagType(currentWorkItem.tags.join("; "), type, nextTag);
   const tagsOperation = currentWorkItem.tags.length > 0 ? "replace" : "add";
   const response = await fetcher(getWorkItemUrl(config, workItemId), {
     method: "PATCH",
@@ -124,13 +128,22 @@ export async function assignWorkItem(
   if (!response.ok) throw new AzureDevOpsError(response.status);
 
   const updatedWorkItem = await getWorkItem(config, workItemId, fetcher);
-  const expectedTag = `responsavel:${personId}`.toLowerCase();
-  const responsibleTags = updatedWorkItem.tags.filter(tag => tagType(tag) === "responsavel");
-  if (responsibleTags.length !== 1 || responsibleTags[0].toLowerCase() !== expectedTag) {
+  const expectedTag = nextTag.toLowerCase();
+  const updatedTypeTags = updatedWorkItem.tags.filter(tag => tagType(tag) === type);
+  if (updatedTypeTags.length !== 1 || updatedTypeTags[0].toLowerCase() !== expectedTag) {
     throw new AzureDevOpsError(502);
   }
 
   return updatedWorkItem;
+}
+
+export async function assignWorkItem(
+  config: AzureDevOpsConfig,
+  workItemId: number,
+  personId: string,
+  fetcher: typeof fetch = fetch,
+): Promise<AzureWorkItemSnapshot> {
+  return updateWorkItemTag(config, workItemId, "responsavel", personId, fetcher);
 }
 
 function getTagValue(tags: string[], prefix: string): string | undefined {

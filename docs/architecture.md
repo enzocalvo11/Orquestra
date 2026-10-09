@@ -59,9 +59,9 @@ A aplicacao associa tags de responsavel aos profissionais internos por seus IDs.
 
 ## Atribuicao ficticia no Azure DevOps
 
-`POST /api/azure-devops/assign` recebe o ID real do Work Item e um ID existente de `people` em `data/demo-data.ts`. `lib/azure-devops.ts` consulta `System.Tags`, remove tags anteriores com prefixo `responsavel:`, preserva as demais e envia um JSON Patch. Organizacao, projeto e PAT sao configuracoes/segredos disponiveis somente no Worker (`AZURE_DEVOPS_ORGANIZATION`, `AZURE_DEVOPS_PROJECT`, `AZURE_DEVOPS_PAT`). O dashboard chama o endpoint ao confirmar uma troca de responsavel e obtem o ID real da tarefa carregada, sem pedir que o usuario o digite.
+`POST /api/azure-devops/assign` e `POST /api/azure-devops/tags` atualizam tags dos Work Items. `lib/azure-devops.ts` consulta `System.Tags`, substitui a tag do tipo solicitado, preserva as demais e envia JSON Patch; depois faz GET de confirmacao. O dashboard usa o ID real da tarefa carregada. A interface atual permite alterar responsavel e prazo; prazo e serializado como `prazo:<YYYY-MM-DD>` usando uma das quatro semanas configuradas. Organizacao, projeto e PAT sao configuracoes/segredos disponiveis somente no Worker (`AZURE_DEVOPS_ORGANIZATION`, `AZURE_DEVOPS_PROJECT`, `AZURE_DEVOPS_PAT`).
 
-Apos PATCH das tags, `lib/azure-devops.ts` faz um GET adicional para confirmar a atualizacao. O dashboard consulta `GET /api/source` para refletir a nova tag e o responsavel na aplicacao. No Planejamento, essa sincronizacao ocorre ao salvar as alteracoes pendentes.
+O endpoint generico aceita `responsavel`, `prazo` e `demo`, com validacao no servidor. A interface usa atualmente `responsavel` e `prazo`; nao ha editor de `demo` ou habilidade. No Planejamento, as alteracoes de tags ficam em rascunho e sao enviadas ao salvar. Depois de atualizar, o dashboard consulta `GET /api/source` para refletir os valores das tags na aplicacao.
 
 ## Fonte Azure DevOps
 

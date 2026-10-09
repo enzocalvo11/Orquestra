@@ -53,7 +53,7 @@ Selecione uma pessoa para ver as atividades e a causa da ocupação. Quando exis
 
 ## Atribuicao ficticia no Azure DevOps
 
-O endpoint `POST /api/azure-devops/assign` atualiza a tag `responsavel:<id>` de um Work Item real, usando os IDs internos existentes (`ana`, `bruno`, `carla`, `diego`, `elisa`, `fernanda` ou `gustavo`). Ao confirmar uma troca de responsavel, a interface usa o ID real associado ao Work Item carregado. A aplicacao preserva tags de outros tipos, remove a tag `responsavel:` anterior e evita duplicatas.
+Os endpoints `POST /api/azure-devops/assign` e `POST /api/azure-devops/tags` atualizam tags do Work Item real. A atribuicao usa os IDs internos existentes (`ana`, `bruno`, `carla`, `diego`, `elisa`, `fernanda` ou `gustavo`). O modal permite tambem escolher o prazo entre as semanas disponiveis; ao confirmar ou salvar o Planejamento, a aplicacao substitui `prazo:` pela data final da semana escolhida. A aplicacao preserva tags de outros tipos, remove a tag anterior do mesmo tipo e confirma as tags com um novo GET.
 
 Configure `AZURE_DEVOPS_ORGANIZATION=ImportAtlas`, `AZURE_DEVOPS_PROJECT=Orquestra2` e o segredo `AZURE_DEVOPS_PAT` no servidor ou Worker. Para desenvolvimento local, preencha `AZURE_DEVOPS_PAT` em `.dev.vars` (ignorado pelo Git); `.dev.vars.example` mostra o formato. O PAT precisa de permissao para ler e atualizar Work Items. Nunca exponha o PAT no navegador.
 
@@ -72,7 +72,7 @@ O domínio `onboarding@resend.dev` é indicado apenas para testes e possui limit
 
 ### Atribuir responsavel pela interface
 
-Abra um Work Item carregado do Azure DevOps, escolha outro responsavel e confirme a realocacao. Na tela Planejamento, salve as alteracoes pendentes. A aplicacao usa o ID real associado a tarefa, atualiza `System.Tags`, consulta os Work Items novamente e atualiza a interface.
+Abra um Work Item carregado do Azure DevOps, altere o responsavel, a semana planejada ou o prazo e confirme. Na tela Planejamento, salve as alteracoes pendentes. A aplicacao usa o ID real associado a tarefa, atualiza a tag `responsavel:` e/ou `prazo:`, consulta os Work Items novamente e atualiza a interface. O prazo selecionavel corresponde ao horizonte de quatro semanas do quadro.
 
 ## Fonte atual dos dados de planejamento
 

@@ -19,8 +19,8 @@ GET /api/source  ->  lib/azure-devops.ts
    v
 Dashboard.tsx -> Overview / Timelines / Planning / Team
 
-Troca de responsavel:
-Dashboard -> POST /api/azure-devops/assign -> GET Work Item -> PATCH System.Tags -> GET de confirmacao
+Troca de responsavel ou prazo:
+Dashboard -> POST /api/azure-devops/tags -> GET Work Item -> PATCH System.Tags -> GET de confirmacao
            -> GET /api/source para atualizar a interface
 
 Semana do planejamento:
@@ -54,6 +54,8 @@ As chamadas ao Azure e o PAT ficam no backend/Worker. O frontend recebe apenas d
 - O campo nativo `System.AssignedTo` nao e alterado.
 - Ao confirmar uma realocacao fora da aba Planejamento, o dashboard atualiza a tag quando o responsavel mudou e recarrega `/api/source`.
 - Na aba Planejamento, a atribuicao so e enviada ao Azure ao salvar as alteracoes pendentes; a tela entao recarrega a fonte.
+- O modal tambem permite mudar o prazo entre as quatro semanas do quadro. O valor escolhido e gravado como `prazo:<data-final-da-semana>`; a tag `prazo:` anterior e removida, as outras tags sao preservadas e a fonte e consultada novamente.
+- `POST /api/azure-devops/tags` e o endpoint servidor comum para os tipos `responsavel`, `prazo` e `demo`. A rota valida responsavel conhecido, data de prazo dentro das semanas suportadas e identificador numerico para `demo`. A interface atual edita responsavel e prazo; nao ha campo para editar `demo` ou habilidade.
 
 ### 3. Planejamento e realocacoes
 
@@ -77,8 +79,9 @@ As chamadas ao Azure e o PAT ficam no backend/Worker. O frontend recebe apenas d
 
 - `.dev.vars.example`: modelo local das configuracoes Azure; PAT intencionalmente vazio.
 - `app/api/azure-devops/assign/route.ts`: endpoint servidor para atribuir responsavel por tag.
-- `lib/azure-devops.ts`: cliente REST, leitura da fonte, mapeamento de Work Items e normalizacao/substituicao de tags.
-- `lib/azure-devops.test.mjs`: testes mockados do cliente e das regras de tags/plano.
+- `app/api/azure-devops/tags/route.ts`: endpoint servidor para substituir tags `responsavel`, `prazo` ou `demo` com validacao por tipo.
+- `lib/azure-devops.ts`: cliente REST, leitura da fonte, mapeamento de Work Items e normalizacao/substituicao/verificacao de tags.
+- `lib/azure-devops.test.mjs`: testes mockados do cliente, substituicao de tags de responsavel/prazo e regras de plano.
 - `docs/GUIA_MERGE_AZURE_DEVOPS.md`: este guia de integracao e merge.
 
 ### Arquivos modificados
@@ -92,8 +95,8 @@ As chamadas ao Azure e o PAT ficam no backend/Worker. O frontend recebe apenas d
 - `features/dashboard/types.ts`: amplia o tipo de resposta da fonte.
 - `features/dashboard/Dashboard.tsx`: carrega/recarrega Azure, coordena atribuicao, realocacao e sincronizacao, distingue rascunhos do planejamento e dados ja refletidos no Azure.
 - `features/overview/OverviewPage.tsx`: exibe fonte, contagem, atualizacao, carregamento e erro da consulta Azure.
-- `features/planning/PlanningPage.tsx`: aceita arraste para qualquer profissional valido, mantendo a linha sem responsavel como origem visual e nao como destino.
-- `features/work-items/TaskDialog.tsx`: remove entrada manual do ID Azure e permite escolher qualquer profissional na aba Planejamento.
+- `features/planning/PlanningPage.tsx` e `PeopleByWeek.tsx`: o arraste respeita a habilidade exigida pela atividade, mantendo a linha sem responsavel como origem visual e nao como destino.
+- `features/work-items/TaskDialog.tsx`: remove entrada manual do ID Azure, permite editar o prazo no modal e lista apenas profissionais com a habilidade exigida.
 - `lib/planning.ts`: aceita Work Items recebidos da fonte, usa a atribuicao atual do Azure e preserva apenas mudancas pendentes como rascunho de pessoa; exclui `sem-responsavel` das sugestoes automaticas.
 - `app/globals.css`: remove estilos da antiga secao de atribuicao manual no modal.
 - `components/layout/Sidebar.tsx`: identifica o workspace ImportAtlas/Orquestra2 e a origem Azure.
@@ -136,7 +139,7 @@ npx --no-install tsx --test lib/azure-devops.test.mjs
 npm run build
 ```
 
-Os nove testes do cliente Azure usam `fetch` mockado; nao alteram Work Items reais. Eles cobrem substituicao/preservacao de tags, tags duplicadas, resposta desatualizada apos PATCH, erro HTTP, leitura da fonte e precedencia da tag Azure sobre pessoa antiga persistida no D1.
+Os dez testes do cliente Azure usam `fetch` mockado; nao alteram Work Items reais. Eles cobrem substituicao/preservacao de tags de responsavel e prazo, tags duplicadas, resposta desatualizada apos PATCH, erro HTTP, leitura da fonte e precedencia da tag Azure sobre pessoa antiga persistida no D1.
 
 O build pode emitir um aviso de deprecacao `punycode` da cadeia de ferramentas, mas concluiu com sucesso.
 
