@@ -19,6 +19,18 @@ export interface WorkItem {
 export interface PlanChange {
   taskId: string; personId: string; weekIndex: number;
 }
+export interface PlanningTransition {
+  taskId: string;
+  previousPersonId: string;
+  previousWeekIndex: number;
+  nextPersonId: string;
+  nextWeekIndex: number;
+}
+export interface PlanningNotificationResult {
+  status: "sent" | "partial" | "failed" | "not-configured" | "not-requested";
+  recipientCount: number;
+  sentCount: number;
+}
 
 export const weeks = [
   { label: "05–11 out", short: "05 out", range: "5 a 11 de outubro", start: "2026-10-05", end: "2026-10-11" },
