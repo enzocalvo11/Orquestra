@@ -1,10 +1,28 @@
 import { eq } from "drizzle-orm";
+import { env } from "cloudflare:workers";
 import { getDb } from "../../../db";
 import { planChanges } from "../../../db/schema";
-import { people, weeks, workItems, type PlanChange } from "../../../data/demo-data";
+import { weeks, type PlanChange } from "../../../data/demo-data";
+import { getAzureSource } from "../../../lib/azure-devops";
 import { skillMismatchMessage } from "../../../lib/planning";
 
 export const dynamic = "force-dynamic";
+
+async function getPlanningSource() {
+  const { AZURE_DEVOPS_ORGANIZATION, AZURE_DEVOPS_PROJECT, AZURE_DEVOPS_PAT } = env as typeof env & {
+    AZURE_DEVOPS_ORGANIZATION?: string;
+    AZURE_DEVOPS_PROJECT?: string;
+    AZURE_DEVOPS_PAT?: string;
+  };
+  if (!AZURE_DEVOPS_ORGANIZATION || !AZURE_DEVOPS_PROJECT || !AZURE_DEVOPS_PAT) {
+    throw new Error("Azure DevOps is not configured.");
+  }
+  return getAzureSource({
+    organization: AZURE_DEVOPS_ORGANIZATION,
+    project: AZURE_DEVOPS_PROJECT,
+    pat: AZURE_DEVOPS_PAT,
+  });
+}
 
 export async function GET() {
   try {
@@ -20,8 +38,9 @@ export async function POST(request: Request) {
     const body = await request.json() as {
       taskId?: string; personId?: string; weekIndex?: number;
     };
-    const task = workItems.find(item => item.id === body.taskId);
-    const person = people.find(item => item.id === body.personId);
+    const source = await getPlanningSource();
+    const task = source.workItems.find(item => item.id === body.taskId);
+    const person = source.people.find(item => item.id === body.personId);
     if (!task || !person || !Number.isInteger(body.weekIndex) ||
       (body.weekIndex as number) < 0 || (body.weekIndex as number) >= weeks.length) {
       return Response.json({ error: "Tarefa, profissional ou período inválido." }, { status: 400 });
@@ -58,14 +77,15 @@ export async function PUT(request: Request) {
 
     const requestedChanges: PlanChange[] = [];
     const seenTaskIds = new Set<string>();
+    const source = await getPlanningSource();
     for (const entry of body.changes) {
       if (!entry || typeof entry !== "object") {
         return Response.json({ error: "Há uma alteração inválida no planejamento." }, { status: 400 });
       }
 
       const change = entry as Partial<PlanChange>;
-      const task = workItems.find(item => item.id === change.taskId);
-      const person = people.find(item => item.id === change.personId);
+      const task = source.workItems.find(item => item.id === change.taskId);
+      const person = source.people.find(item => item.id === change.personId);
       if (!task || !person || !Number.isInteger(change.weekIndex) ||
         (change.weekIndex as number) < 0 || (change.weekIndex as number) >= weeks.length ||
         seenTaskIds.has(task.id)) {
@@ -80,7 +100,7 @@ export async function PUT(request: Request) {
     }
 
     const changesToSave = requestedChanges.filter(change => {
-      const task = workItems.find(item => item.id === change.taskId)!;
+      const task = source.workItems.find(item => item.id === change.taskId)!;
       return task.personId !== change.personId || task.week !== change.weekIndex;
     });
     const db = getDb();

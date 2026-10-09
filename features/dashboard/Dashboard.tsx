@@ -1,13 +1,14 @@
 "use client";
 
-import { useEffect, useMemo, useState, type DragEvent } from "react";
+import { useCallback, useEffect, useMemo, useState, type DragEvent } from "react";
 import { NoticeToast } from "../../components/feedback/NoticeToast";
 import { Sidebar } from "../../components/layout/Sidebar";
 import { Topbar } from "../../components/layout/Topbar";
-import { workItems, type PlanChange } from "../../data/demo-data";
+import { replaceAzureSource, type PlanChange } from "../../data/demo-data";
 import { OverviewPage } from "../overview/OverviewPage";
 import { PlanningPage } from "../planning/PlanningPage";
 import { TaskDialog } from "../work-items/TaskDialog";
+import type { AzureWorkItemSnapshot } from "../../lib/azure-devops";
 import { TimelinesPage } from "../timelines/TimelinesPage";
 import {
   allLoads,
@@ -28,6 +29,11 @@ interface DashboardProps {
 interface PlanApiResponse {
   error?: string;
   changes?: PlanChange[];
+}
+
+interface AzureAssignmentResponse {
+  error?: string;
+  workItem?: AzureWorkItemSnapshot;
 }
 
 function getPlanChangeCount(saved: PlanChange[], draft: PlanChange[]): number {
@@ -51,6 +57,14 @@ function planChangesMatch(left: PlanChange[], right: PlanChange[]): boolean {
   });
 }
 
+function planChangesNotRepresentedInAzure(changes: PlanChange[], workItems: SourceInfo["workItems"]): PlanChange[] {
+  const sourceByTask = new Map(workItems.map((item) => [item.id, item]));
+  return changes.filter((change) => {
+    const item = sourceByTask.get(change.taskId);
+    return !item || item.personId !== change.personId || item.week !== change.weekIndex;
+  });
+}
+
 export default function Dashboard({ initialChanges }: DashboardProps) {
   const [view, setView] = useState<DashboardView>("overview");
   const [changes, setChanges] = useState<PlanChange[]>(initialChanges);
@@ -65,10 +79,15 @@ export default function Dashboard({ initialChanges }: DashboardProps) {
   const [busy, setBusy] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [sourceInfo, setSourceInfo] = useState<SourceInfo | null>(null);
+  const [sourceError, setSourceError] = useState("");
   const [notice, setNotice] = useState("");
 
   const activeChanges = view === "planning" ? draftChanges : changes;
-  const items = useMemo(() => plannedItems(activeChanges), [activeChanges]);
+  const items = useMemo(() => plannedItems(
+    activeChanges,
+    sourceInfo?.workItems ?? [],
+    changes,
+  ), [activeChanges, changes, sourceInfo]);
   const loads = useMemo(() => allLoads(items), [items]);
   const alerts = useMemo(() => getAlerts(items), [items]);
   const suggestions = useMemo(() => getSuggestions(items), [items]);
@@ -112,6 +131,16 @@ export default function Dashboard({ initialChanges }: DashboardProps) {
 
     setBusy(true);
     try {
+      if (task.personId !== personId) {
+        if (!Number.isSafeInteger(task.externalId) || task.externalId <= 0) {
+          throw new Error("Esta tarefa não tem um ID do Azure DevOps válido.");
+        }
+        await updateAzureResponsible(task.externalId, personId);
+        if (!(await syncSource(true))) {
+          throw new Error("A tag foi atualizada no Azure DevOps, mas não foi possível recarregar os Work Items. Atualize a lista antes de continuar.");
+        }
+      }
+
       const response = await fetch("/api/plan", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -125,7 +154,7 @@ export default function Dashboard({ initialChanges }: DashboardProps) {
       }
 
       const savedChange = data.changes.find((change) => change.taskId === id);
-      const savedPersonId = savedChange?.personId ?? task.personId;
+      const savedPersonId = savedChange?.personId ?? personId;
       const savedWeekIndex = savedChange?.weekIndex ?? task.week;
       if (savedPersonId !== personId || savedWeekIndex !== weekIndex) {
         throw new Error("O destino solicitado não foi gravado. Tente novamente.");
@@ -151,6 +180,11 @@ export default function Dashboard({ initialChanges }: DashboardProps) {
     const task = items.find((item) => item.id === id);
     if (!task) return;
 
+    if (personId === "sem-responsavel") {
+      setNotice("Não é possível mover a atividade para \"Sem responsável\".");
+      return;
+    }
+
     const person = getPerson(personId);
     if (!person?.skills.includes(task.skill)) {
       setNotice(skillMismatchMessage(person?.name ?? "Este profissional", task.skill));
@@ -162,7 +196,7 @@ export default function Dashboard({ initialChanges }: DashboardProps) {
       return;
     }
 
-    const originalTask = workItems.find((item) => item.id === id);
+    const originalTask = sourceInfo?.workItems.find((item) => item.id === id);
     if (!originalTask) return;
 
     const nextChanges = draftChanges.filter((change) => change.taskId !== id);
@@ -190,6 +224,29 @@ export default function Dashboard({ initialChanges }: DashboardProps) {
 
     setBusy(true);
     try {
+      const sourceItems = sourceInfo?.workItems ?? [];
+      const sourceByTask = new Map(sourceItems.map((item) => [item.id, item]));
+      const assignments = draftChanges.flatMap((change) => {
+        const item = sourceByTask.get(change.taskId);
+        const currentPersonId = item?.personId;
+        return item && currentPersonId !== change.personId
+          ? [{ item, personId: change.personId }]
+          : [];
+      });
+
+      for (const { item, personId } of assignments) {
+        await updateAzureResponsible(item.externalId, personId);
+      }
+      let currentWorkItems = sourceItems;
+      if (assignments.length) {
+        const refreshedSource = await syncSource(true);
+        if (!refreshedSource) {
+          throw new Error("As tags foram atualizadas no Azure DevOps, mas não foi possível recarregar os Work Items. Atualize a lista antes de salvar o planejamento.");
+        }
+        currentWorkItems = refreshedSource.workItems;
+      }
+      const expectedPlanChanges = planChangesNotRepresentedInAzure(draftChanges, currentWorkItems);
+
       const response = await fetch("/api/plan", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
@@ -198,7 +255,7 @@ export default function Dashboard({ initialChanges }: DashboardProps) {
       const data = await response.json() as PlanApiResponse;
 
       if (!response.ok) throw new Error(data.error ?? "Não foi possível salvar as alterações.");
-      if (!Array.isArray(data.changes) || !planChangesMatch(data.changes, draftChanges)) {
+      if (!Array.isArray(data.changes) || !planChangesMatch(data.changes, expectedPlanChanges)) {
         throw new Error("O servidor não confirmou todas as alterações. Tente novamente.");
       }
 
@@ -232,21 +289,50 @@ export default function Dashboard({ initialChanges }: DashboardProps) {
     }
   }
 
-  async function syncSource() {
+  const syncSource = useCallback(async (silent = false): Promise<SourceInfo | null> => {
     setSyncing(true);
     try {
       const response = await fetch("/api/source", { cache: "no-store" });
-      if (!response.ok) throw new Error();
-
-      const data = await response.json() as SourceInfo;
+      const data = await response.json() as SourceInfo & { error?: string };
+      if (!response.ok) throw new Error(data.error ?? "Não foi possível consultar o Azure DevOps.");
+      if (!Array.isArray(data.workItems) || !Array.isArray(data.projects) || !Array.isArray(data.people)) {
+        throw new Error("A resposta do Azure DevOps está incompleta.");
+      }
+      replaceAzureSource(data);
       setSourceInfo(data);
-      setNotice(`${data.workItemCount} itens fictícios atualizados na visão.`);
-    } catch {
-      setNotice("Não foi possível consultar a fonte de demonstração.");
+      setSourceError("");
+      if (!silent) setNotice(`${data.workItemCount} Work Items atualizados do Azure DevOps.`);
+      return data;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Falha ao consultar o Azure DevOps.";
+      setSourceError(message);
+      if (!silent) setNotice(message);
+      return null;
     } finally {
       setSyncing(false);
     }
+  }, []);
+
+  async function updateAzureResponsible(workItemId: number, personId: string): Promise<AzureWorkItemSnapshot> {
+    const response = await fetch("/api/azure-devops/assign", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ workItemId, personId }),
+    });
+    const data = await response.json() as AzureAssignmentResponse;
+    if (!response.ok || !data.workItem) {
+      throw new Error(data.error ?? "Não foi possível confirmar as tags no Azure DevOps.");
+    }
+    const expectedTag = `responsavel:${personId}`.toLowerCase();
+    if (!data.workItem.tags.some((tag) => tag.toLowerCase() === expectedTag)) {
+      throw new Error("O Azure DevOps não confirmou a tag do responsável após a atualização.");
+    }
+    return data.workItem;
   }
+
+  useEffect(() => {
+    void syncSource();
+  }, [syncSource]);
 
   function startDrag(event: DragEvent<HTMLElement>, id: string) {
     event.dataTransfer.setData("text/plain", id);
@@ -303,6 +389,7 @@ export default function Dashboard({ initialChanges }: DashboardProps) {
               suggestions={suggestions}
               selectedCell={selectedCell}
               sourceInfo={sourceInfo}
+              sourceError={sourceError}
               syncing={syncing}
               onSelectCell={setSelectedCell}
               onOpenTask={openTask}

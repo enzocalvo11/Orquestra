@@ -45,15 +45,23 @@ export function overviewPeriod(now = new Date()): { week: number; isCurrent: boo
   return { week: date < weeks[0].start ? 0 : weeks.length - 1, isCurrent: false };
 }
 
-export function plannedItems(changes: PlanChange[]): PlannedItem[] {
+export function plannedItems(
+  changes: PlanChange[],
+  sourceWorkItems: WorkItem[] = workItems,
+  savedChanges: PlanChange[] = [],
+): PlannedItem[] {
   const byTask = new Map(changes.map(change => [change.taskId, change]));
-  return workItems.map(task => {
+  const savedByTask = new Map(savedChanges.map(change => [change.taskId, change]));
+  return sourceWorkItems.map(task => {
     const change = byTask.get(task.id);
+    const savedChange = savedByTask.get(task.id);
+    const savedPersonId = savedChange?.personId ?? task.personId;
+    const hasPendingAssignment = change !== undefined && change.personId !== savedPersonId;
     return {
       ...task,
-      plannedPersonId: change?.personId ?? task.personId,
+      plannedPersonId: hasPendingAssignment ? change.personId : task.personId,
       plannedWeek: change?.weekIndex ?? task.week,
-      isChanged: Boolean(change),
+      isChanged: Boolean(change && (change.personId !== task.personId || change.weekIndex !== task.week)),
     };
   });
 }
@@ -125,7 +133,7 @@ export function getSuggestions(items: PlannedItem[]): Suggestion[] {
     let chosen: Suggestion | null = null;
     for (const task of tasks) {
       const candidates = people
-        .filter(person => person.id !== source.id && person.skills.includes(task.skill))
+        .filter(person => person.id !== source.id && person.id !== "sem-responsavel" && person.skills.includes(task.skill))
         .map(person => ({ person, free: capacityFor(person, cell.week) - loadFor(items, person.id, cell.week).planned }))
         .filter(candidate => candidate.free >= task.hours)
         .sort((a, b) =>

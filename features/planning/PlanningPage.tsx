@@ -135,7 +135,8 @@ export function PlanningPage({
                 </div>
                 {weeks.map((_, week) => {
                   const cell = loadFor(items, person.id, week);
-                  const canDrop = !draggedTask || person.skills.includes(draggedTask.skill);
+                  const canDrop = person.id !== "sem-responsavel" &&
+                    (!draggedTask || person.skills.includes(draggedTask.skill));
 
                   return (
                     <div
