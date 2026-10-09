@@ -5,11 +5,11 @@ import "../features/planning/planning.css";
 import "./theme.css";
 
 export const metadata: Metadata = {
-  title: "Orquestra | Capacidade e alocação",
+  title: "Orquestra | Gestão empresarial",
   description: "Timelines, capacidade e decisões de alocação entre projetos.",
   icons: {
-    icon: "/favicon.svg",
-    shortcut: "/favicon.svg",
+    icon: "/orquestra-favicon-v2.png",
+    shortcut: "/orquestra-favicon-v2.png",
   },
 };
 
