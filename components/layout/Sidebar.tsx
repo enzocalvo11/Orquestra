@@ -50,7 +50,7 @@ export function Sidebar({
         <span className="workspace-icon"><Layers3 size={17} /></span>
         <span>
           <strong>Workspace Iport</strong>
-          <small>Ambiente de demonstração</small>
+          <small>ImportAtlas / Orquestra2</small>
         </span>
       </div>
 
@@ -85,14 +85,14 @@ export function Sidebar({
       <div className="sidebar-spacer" />
       <div className="sidebar-foot">
         <span className="online-dot" />
-        Fonte fictícia Azure DevOps
-        <span title="Dados criados para a demonstração"><Info size={14} /></span>
+        Fonte Azure DevOps
+        <span title="Equipe e capacidade complementares mantidas no projeto"><Info size={14} /></span>
       </div>
       <div className="sidebar-profile">
         <Avatar personId="ana" />
         <span>
           <strong>Gestão de projetos</strong>
-          <small>Modo demonstração</small>
+          <small>Equipe interna</small>
         </span>
         <span className="profile-dots">•••</span>
       </div>

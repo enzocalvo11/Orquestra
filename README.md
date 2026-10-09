@@ -11,7 +11,7 @@ Protótipo de apoio à gestão de projetos: reúne tarefas de diferentes projeto
 
 ## Estado da integração
 
-O Azure DevOps ainda não está conectado. O botão de atualização consulta somente a fonte fictícia em `data/demo-data.ts`. A aplicação separa work items de demonstração e cadastro interno de profissionais, mas ainda usa dados locais para ambos. Não inclua tokens ou credenciais no navegador.
+O Azure DevOps fornece os projetos e Work Items exibidos pela aplicacao. O cadastro interno de profissionais e os dados de capacidade continuam locais, assim como as propostas de planejamento salvas em D1. Nao inclua tokens ou credenciais no navegador.
 
 ## Estrutura do código
 
@@ -31,7 +31,7 @@ Para retomar o projeto em outra sessão do Codex, leia também [docs/CODEX_CONTE
 
 ## Desenvolvimento local
 
-Use Node.js 22.13 ou superior. Na pasta que contém `package.json`, execute:
+Use Node.js 22.13 ou superior. Na pasta que contem `package.json`, execute:
 
 ```bash
 npm ci
@@ -40,10 +40,26 @@ npx wrangler d1 execute DB --config dist/server/wrangler.json --local --file dri
 npm run dev
 ```
 
-O comando do D1 cria a tabela local na primeira instalação. Nos próximos acessos, basta `npm run dev`. Abra a URL mostrada pelo terminal, normalmente `http://localhost:5173`. A base local fica em `.wrangler/state` e é separada da base hospedada. Para conferir alterações, execute `npm run lint`, `npx tsc --noEmit` e `npm run build`.
+O comando do D1 cria a tabela local na primeira instalacao. Nos proximos acessos, basta `npm run dev`. Abra a URL mostrada pelo terminal, normalmente `http://localhost:5173`. A base local fica em `.wrangler/state` e e separada da base hospedada. Para conferir alteracoes, execute `npm run lint`, `npx tsc --noEmit` e `npm run build`.
 
 ## Visão Geral
 
 A Visão Geral usa a semana do cenário que coincide com a data atual em São Paulo. Fora do período de 5 de outubro a 1º de novembro de 2026, mostra a semana mais próxima como **período do cenário**. O mapa usa a carga e a capacidade calculadas em `lib/planning.ts`, incluindo ausências e feriado. Cada cor é proporcional ao percentual de ocupação; o número e as horas permanecem visíveis para não depender somente da cor.
 
 Selecione uma pessoa para ver as atividades e a causa da ocupação. Quando existe uma sugestão, **Revisar sugestão** abre a atividade com o destino proposto e o impacto estimado. A mudança só é gravada no D1 após **Confirmar realocação**. Os alertas e o gráfico mostram apenas a semana exibida; o planejamento mantém as quatro semanas.
+
+## Atribuicao ficticia no Azure DevOps
+
+O endpoint `POST /api/azure-devops/assign` atualiza a tag `responsavel:<id>` de um Work Item real, usando os IDs internos existentes (`ana`, `bruno`, `carla`, `diego`, `elisa`, `fernanda` ou `gustavo`). Ao confirmar uma troca de responsavel, a interface usa o ID real associado ao Work Item carregado. A aplicacao preserva tags de outros tipos, remove a tag `responsavel:` anterior e evita duplicatas.
+
+Configure `AZURE_DEVOPS_ORGANIZATION=ImportAtlas`, `AZURE_DEVOPS_PROJECT=Orquestra2` e o segredo `AZURE_DEVOPS_PAT` no servidor ou Worker. Para desenvolvimento local, preencha `AZURE_DEVOPS_PAT` em `.dev.vars` (ignorado pelo Git); `.dev.vars.example` mostra o formato. O PAT precisa de permissao para ler e atualizar Work Items. Nunca exponha o PAT no navegador.
+
+### Atribuir responsavel pela interface
+
+Abra um Work Item carregado do Azure DevOps, escolha outro responsavel e confirme a realocacao. Na tela Planejamento, salve as alteracoes pendentes. A aplicacao usa o ID real associado a tarefa, atualiza `System.Tags`, consulta os Work Items novamente e atualiza a interface.
+
+## Fonte atual dos dados de planejamento
+
+Os Work Items e os projetos exibidos agora são consultados do Azure DevOps (`ImportAtlas/Orquestra2`) em `GET /api/source`. A consulta usa WIQL para tarefas, bugs e testes, busca seus campos e tags em lotes e recarrega a lista depois de uma atribuição. O código local mantém somente dados complementares que não existem no Azure (equipe, habilidades, capacidade, calendário e alguns metadados sem equivalente no Work Item). As propostas locais de semana continuam em D1; os dados de Work Items não são lidos de D1 nem do conjunto fictício.
+
+As tags `responsavel`, `prazo` e `demo` têm no máximo uma ocorrência de cada tipo após atualização. Ao atribuir responsável, a tag anterior `responsavel:` é substituída; os formatos existentes `prazo-...` e `demo-...` são reconhecidos e preservados sem duplicatas.

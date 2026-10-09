@@ -33,14 +33,13 @@ Este documento descreve o protótipo atual. O objetivo é manter a interface, as
 | `data/demo-data.ts` | Dados fictícios que simulam a fonte de work items. |
 | `lib/planning.ts` | Cálculos e regras de planejamento. |
 | `db/` | Acesso ao D1 e schema da tabela de mudanças. |
-| `app/api/` | Endpoints para salvar o planejamento e consultar a fonte demo. |
+| `app/api/` | Endpoints para salvar o planejamento, consultar o Azure DevOps e atualizar tags. |
 
 ## O que os dados significam hoje
 
-- `data/demo-data.ts` é a fonte de exemplo com projetos, work items, profissionais, habilidades, capacidade, ausências e calendário.
-- O identificador e a hierarquia dos itens imitam campos comuns do Azure DevOps, mas os dados não vêm de uma organização real.
-- `db/` guarda apenas as realocações propostas. Não é uma cópia completa do Azure DevOps.
-- `GET /api/source` simula uma atualização e informa a contagem de itens da demonstração; ainda não sincroniza dados externos.
+- O Azure DevOps fornece projetos e Work Items por `GET /api/source`.
+- `data/demo-data.ts` mantem dados internos da equipe e metadados complementares que nao existem como campos do Azure.
+- `db/` guarda somente propostas de planejamento, como semana local; nao substitui o Azure como fonte dos Work Items.
 
 ## Onde começar ao fazer mudanças
 
@@ -50,4 +49,14 @@ Este documento descreve o protótipo atual. O objetivo é manter a interface, as
 - Adicionar uma peça visual reutilizável: `components/common/`, `components/layout/` ou `components/feedback/`.
 - Alterar persistência: `db/` e a rota correspondente em `app/api/`.
 
-Antes de conectar o Azure DevOps, definir o mapeamento de identidades externas para os profissionais internos. Credenciais de integração devem permanecer no servidor, nunca no código cliente.
+A aplicacao associa tags de responsavel aos profissionais internos por seus IDs. Credenciais de integracao permanecem no servidor, nunca no codigo cliente.
+
+## Atribuicao ficticia no Azure DevOps
+
+`POST /api/azure-devops/assign` recebe o ID real do Work Item e um ID existente de `people` em `data/demo-data.ts`. `lib/azure-devops.ts` consulta `System.Tags`, remove tags anteriores com prefixo `responsavel:`, preserva as demais e envia um JSON Patch. Organizacao, projeto e PAT sao configuracoes/segredos disponiveis somente no Worker (`AZURE_DEVOPS_ORGANIZATION`, `AZURE_DEVOPS_PROJECT`, `AZURE_DEVOPS_PAT`). O dashboard chama o endpoint ao confirmar uma troca de responsavel e obtem o ID real da tarefa carregada, sem pedir que o usuario o digite.
+
+Apos PATCH das tags, `lib/azure-devops.ts` faz um GET adicional para confirmar a atualizacao. O dashboard consulta `GET /api/source` para refletir a nova tag e o responsavel na aplicacao. No Planejamento, essa sincronizacao ocorre ao salvar as alteracoes pendentes.
+
+## Fonte Azure DevOps
+
+`GET /api/source` executa WIQL no projeto configurado e consulta em lotes os campos das tarefas, bugs e testes existentes. A interface carrega essa resposta ao abrir e ao atualizar; depois de alterar a tag de responsável, executa a mesma consulta para refletir o estado confirmado. `data/demo-data.ts` mantém os dados internos da equipe e metadados suplementares, enquanto a lista atual de Work Items e projetos em memória do navegador vem do Azure DevOps. O D1 persiste somente mudanças locais de semana do planejamento.

@@ -12,7 +12,6 @@ interface PlanningPageProps {
   hasPendingChanges: boolean;
   showSavedIndicator: boolean;
   busy: boolean;
-  dragTaskId: string | null;
   onReset: () => void;
   onCancelChanges: () => void;
   onSaveChanges: () => void;
@@ -29,7 +28,6 @@ export function PlanningPage({
   hasPendingChanges,
   showSavedIndicator,
   busy,
-  dragTaskId,
   onReset,
   onCancelChanges,
   onSaveChanges,
@@ -38,8 +36,6 @@ export function PlanningPage({
   onDragEnd,
   onDrop,
 }: PlanningPageProps) {
-  const draggedTask = items.find((task) => task.id === dragTaskId);
-
   return (
     <>
       <div className="page-heading">
@@ -117,8 +113,7 @@ export function PlanningPage({
                 </div>
                 {weeks.map((_, week) => {
                   const cell = loadFor(items, person.id, week);
-                  const canDrop = !draggedTask || person.skills.includes(draggedTask.skill);
-
+                  const canDrop = person.id !== "sem-responsavel";
                   return (
                     <div
                       key={week}

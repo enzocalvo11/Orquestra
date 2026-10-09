@@ -17,6 +17,7 @@ interface TaskDialogProps {
   draftWeek: number;
   busy: boolean;
   deferSave: boolean;
+  allowAnyPerson?: boolean;
   onDraftPersonChange: (personId: string) => void;
   onDraftWeekChange: (week: number) => void;
   onClose: () => void;
@@ -30,6 +31,7 @@ export function TaskDialog({
   draftWeek,
   busy,
   deferSave,
+  allowAnyPerson = false,
   onDraftPersonChange,
   onDraftWeekChange,
   onClose,
@@ -91,7 +93,8 @@ export function TaskDialog({
             Responsável
             <select value={draftPerson} onChange={(event) => onDraftPersonChange(event.target.value)}>
               {people
-                .filter((person) => person.skills.includes(task.skill))
+                .filter((person) => person.id !== "sem-responsavel" &&
+                  (allowAnyPerson || person.skills.includes(task.skill)))
                 .map((person) => (
                   <option key={person.id} value={person.id}>{person.name} · {person.role}</option>
                 ))}
@@ -115,6 +118,13 @@ export function TaskDialog({
         {draftWeek > task.dueWeek && (
           <p className="deadline-warning">
             <AlertCircle size={16} /> A semana escolhida ultrapassa o prazo desta atividade.
+          </p>
+        )}
+        {draftPerson !== task.plannedPersonId && (
+          <p className="modal-helper">
+            {deferSave
+              ? "Ao salvar as alterações do planejamento, a tag de responsável deste Work Item no Azure DevOps também será atualizada."
+              : "Ao confirmar, a tag de responsável deste Work Item no Azure DevOps também será atualizada."}
           </p>
         )}
         <div className="modal-actions">

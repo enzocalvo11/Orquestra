@@ -20,6 +20,7 @@ interface OverviewPageProps {
   suggestions: Suggestion[];
   selectedCell: CapacitySelection;
   sourceInfo: SourceInfo | null;
+  sourceError: string;
   syncing: boolean;
   onSelectCell: (selection: CapacitySelection) => void;
   onOpenTask: (taskId: string) => void;
@@ -259,7 +260,7 @@ function WeekAlerts({
 }
 
 export function OverviewPage({
-  items, loads, alerts, suggestions, selectedCell, sourceInfo, syncing,
+  items, loads, alerts, suggestions, selectedCell, sourceInfo, sourceError, syncing,
   onSelectCell, onOpenTask, onApplySuggestion, onAlertSelect, onRefresh,
   onNavigatePlanning,
 }: OverviewPageProps) {
@@ -301,10 +302,12 @@ export function OverviewPage({
       <div className="source-banner">
         <span className="source-icon"><Cloud size={19} /></span>
         <div>
-          <strong>Dados de demonstração</strong>
-          <span>{items.length} itens fictícios em {projects.length} projetos · integração com Azure DevOps em desenvolvimento</span>
+          <strong>{sourceInfo?.source ?? "Azure DevOps"}</strong>
+          <span>{sourceInfo
+            ? `${sourceInfo.workItemCount} Work Items atuais em ${sourceInfo.projectCount} projetos. Equipe e capacidade permanecem como dados internos.`
+            : sourceError || (syncing ? "Consultando Work Items no Azure DevOps..." : "Aguardando consulta ao Azure DevOps.")}</span>
         </div>
-        <span className="source-status"><i /> {sourceInfo ? `Consultado às ${timeLabel(sourceInfo.syncedAt)}` : "Pronto para consultar"}</span>
+        <span className="source-status"><i /> {sourceInfo ? `Atualizado ${timeLabel(sourceInfo.syncedAt)}` : sourceError ? "Falha na consulta" : "Conectando"}</span>
       </div>
 
       <div className="metric-grid">

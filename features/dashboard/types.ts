@@ -1,3 +1,5 @@
+import type { Person, Project, WorkItem } from "../../data/demo-data";
+
 export type DashboardView = "overview" | "timelines" | "planning" | "team";
 
 export interface SourceInfo {
@@ -5,6 +7,11 @@ export interface SourceInfo {
   projectCount: number;
   workItemCount: number;
   mode: string;
+  source: string;
+  workItems: WorkItem[];
+  projects: Project[];
+  people: Person[];
+  sourceError?: string;
 }
 
 export interface CapacitySelection {
