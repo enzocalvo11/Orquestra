@@ -4,7 +4,12 @@ import { useCallback, useEffect, useMemo, useState, type DragEvent } from "react
 import { NoticeToast } from "../../components/feedback/NoticeToast";
 import { Sidebar } from "../../components/layout/Sidebar";
 import { Topbar } from "../../components/layout/Topbar";
-import { replaceAzureSource, type PlanChange } from "../../data/demo-data";
+import {
+  replaceAzureSource,
+  type PlanChange,
+  type PlanningNotificationResult,
+  type PlanningTransition,
+} from "../../data/demo-data";
 import { OverviewPage } from "../overview/OverviewPage";
 import { PlanningPage } from "../planning/PlanningPage";
 import { TaskDialog } from "../work-items/TaskDialog";
@@ -29,6 +34,7 @@ interface DashboardProps {
 interface PlanApiResponse {
   error?: string;
   changes?: PlanChange[];
+  notification?: PlanningNotificationResult;
 }
 
 interface AzureAssignmentResponse {
@@ -63,6 +69,47 @@ function planChangesNotRepresentedInAzure(changes: PlanChange[], workItems: Sour
     const item = sourceByTask.get(change.taskId);
     return !item || item.personId !== change.personId || item.week !== change.weekIndex;
   });
+}
+
+function getPlanningTransitions(
+  savedChanges: PlanChange[],
+  nextChanges: PlanChange[],
+  workItems: SourceInfo["workItems"],
+): PlanningTransition[] {
+  const currentItems = plannedItems(savedChanges, workItems, savedChanges);
+  const nextItems = plannedItems(nextChanges, workItems, savedChanges);
+  const nextByTask = new Map(nextItems.map(item => [item.id, item]));
+
+  return currentItems.flatMap((current): PlanningTransition[] => {
+    const next = nextByTask.get(current.id);
+    if (!next || (current.plannedPersonId === next.plannedPersonId && current.plannedWeek === next.plannedWeek)) {
+      return [];
+    }
+    return [{
+      taskId: current.id,
+      previousPersonId: current.plannedPersonId,
+      previousWeekIndex: current.plannedWeek,
+      nextPersonId: next.plannedPersonId,
+      nextWeekIndex: next.plannedWeek,
+    }];
+  });
+}
+
+function savedNotice(baseMessage: string, notification?: PlanningNotificationResult): string {
+  if (!notification || notification.status === "not-requested") return baseMessage;
+  if (notification.status === "sent") {
+    const detail = notification.sentCount === 1
+      ? "O colaborador foi notificado por e-mail."
+      : `${notification.sentCount} colaboradores foram notificados por e-mail.`;
+    return `${baseMessage} ${detail}`;
+  }
+  if (notification.status === "partial") {
+    return `${baseMessage} ${notification.sentCount} de ${notification.recipientCount} notificações foram enviadas.`;
+  }
+  if (notification.status === "not-configured") {
+    return `${baseMessage} O e-mail não foi enviado porque o serviço de notificações ainda não está configurado.`;
+  }
+  return `${baseMessage} Não foi possível enviar a notificação por e-mail.`;
 }
 
 export default function Dashboard({ initialChanges }: DashboardProps) {
@@ -144,7 +191,18 @@ export default function Dashboard({ initialChanges }: DashboardProps) {
       const response = await fetch("/api/plan", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ taskId: id, personId, weekIndex }),
+        body: JSON.stringify({
+          taskId: id,
+          personId,
+          weekIndex,
+          notificationChanges: [{
+            taskId: id,
+            previousPersonId: task.plannedPersonId,
+            previousWeekIndex: task.plannedWeek,
+            nextPersonId: personId,
+            nextWeekIndex: weekIndex,
+          } satisfies PlanningTransition],
+        }),
       });
       const data = await response.json() as PlanApiResponse;
 
@@ -164,7 +222,7 @@ export default function Dashboard({ initialChanges }: DashboardProps) {
       setDraftChanges(data.changes);
       setShowSavedIndicator(false);
       setSelectedCell({ personId, week: weekIndex });
-      setNotice(`${task.title} realocada. A capacidade foi recalculada.`);
+      setNotice(savedNotice(`${task.title} realocada. A capacidade foi recalculada.`, data.notification));
       setTaskId(null);
     } catch (error) {
       setNotice(error instanceof Error ? error.message : "Não foi possível salvar a mudança.");
@@ -225,6 +283,7 @@ export default function Dashboard({ initialChanges }: DashboardProps) {
     setBusy(true);
     try {
       const sourceItems = sourceInfo?.workItems ?? [];
+      const notificationChanges = getPlanningTransitions(changes, draftChanges, sourceItems);
       const sourceByTask = new Map(sourceItems.map((item) => [item.id, item]));
       const assignments = draftChanges.flatMap((change) => {
         const item = sourceByTask.get(change.taskId);
@@ -250,7 +309,7 @@ export default function Dashboard({ initialChanges }: DashboardProps) {
       const response = await fetch("/api/plan", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ changes: draftChanges }),
+        body: JSON.stringify({ changes: draftChanges, notificationChanges }),
       });
       const data = await response.json() as PlanApiResponse;
 
@@ -262,7 +321,7 @@ export default function Dashboard({ initialChanges }: DashboardProps) {
       setChanges(data.changes);
       setDraftChanges(data.changes);
       setShowSavedIndicator(true);
-      setNotice("Todas as alterações foram salvas.");
+      setNotice(savedNotice("Todas as alterações foram salvas.", data.notification));
     } catch (error) {
       setNotice(error instanceof Error ? error.message : "Não foi possível salvar as alterações.");
     } finally {
@@ -276,12 +335,13 @@ export default function Dashboard({ initialChanges }: DashboardProps) {
     setBusy(true);
     try {
       const response = await fetch("/api/plan", { method: "DELETE" });
-      if (!response.ok) throw new Error();
+      const data = await response.json() as PlanApiResponse;
+      if (!response.ok) throw new Error(data.error);
 
       setChanges([]);
       setDraftChanges([]);
       setShowSavedIndicator(false);
-      setNotice("Planejamento original restaurado.");
+      setNotice(savedNotice("Planejamento original restaurado.", data.notification));
     } catch {
       setNotice("Não foi possível restaurar o planejamento.");
     } finally {

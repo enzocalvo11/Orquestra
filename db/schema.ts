@@ -7,3 +7,9 @@ export const planChanges = sqliteTable("plan_changes", {
   weekIndex: integer("week_index").notNull(),
   updatedAt: text("updated_at").notNull(),
 });
+
+export const employeeContacts = sqliteTable("employee_contacts", {
+  personId: text("person_id").primaryKey(),
+  email: text("email").notNull(),
+  updatedAt: text("updated_at").notNull(),
+});
